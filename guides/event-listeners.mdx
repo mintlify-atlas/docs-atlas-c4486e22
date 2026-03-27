@@ -1,0 +1,375 @@
+---
+title: "Event listeners"
+description: "Register callbacks on the Player to respond to playback state, lyrics loading, and host connection events."
+---
+
+The `Player` class fires events throughout the lifecycle of a lyric app — from loading data to frame-by-frame playback updates. You respond to these events by registering a **listener** object with `player.addListener()`.
+
+## The PlayerListener type
+
+`PlayerListener` is a composite type that merges three listener interfaces:
+
+```typescript
+type PlayerListener = PlayerEventListener & PlayerAppListener & LoaderListener;
+```
+
+| Interface | Purpose |
+|---|---|
+| `PlayerEventListener` | Playback state: position updates, seek, play/pause/stop |
+| `PlayerAppListener` | App lifecycle: host connection, parameter changes, song changes |
+| `LoaderListener` | Data loading: fonts, lyrics, song map |
+
+You only need to implement the callbacks you care about — every callback is optional.
+
+## Registering and removing listeners
+
+```typescript
+const listener = {
+  onTimeUpdate(position) {
+    // called every frame during playback
+  },
+};
+
+player.addListener(listener);
+
+// later, to clean up:
+player.removeListener(listener);
+```
+
+You can register multiple listener objects and remove them individually. `removeListener` returns `true` if the listener was found and removed.
+
+---
+
+## PlayerEventListener callbacks
+
+These callbacks fire in response to playback mechanics.
+
+### onVideoReady
+
+```typescript
+onVideoReady?(v: IVideo): void
+```
+
+Called when the video object is fully constructed and lyrics are loaded. Use this callback to inspect the lyrics data structure before playback begins.
+
+<ParamField path="v" type="IVideo">
+  The constructed video object containing all phrases, words, and characters with their timing information.
+</ParamField>
+
+### onTimerReady
+
+```typescript
+onTimerReady?(timer: Timer): void
+```
+
+Called when the `Timer` is ready for playback. At this point the player can start playing music. This fires after `onVideoReady`.
+
+<ParamField path="timer" type="Timer">
+  The timer instance controlling playback. Gives access to `isPlaying`, `position`, and `wait`.
+</ParamField>
+
+### onMediaElementSet
+
+```typescript
+onMediaElementSet?(el: HTMLElement): void
+```
+
+Called when the DOM element that hosts the audio source is updated. Use this to reattach any custom UI that wraps the media element.
+
+<ParamField path="el" type="HTMLElement">
+  The updated media element.
+</ParamField>
+
+### onVolumeUpdate
+
+```typescript
+onVolumeUpdate?(volume: number): void
+```
+
+Called when the player volume changes.
+
+<ParamField path="volume" type="number">
+  Current volume, ranging from `0` to `100`.
+</ParamField>
+
+### onTimeUpdate
+
+```typescript
+onTimeUpdate?(position: number): void
+```
+
+Called every time the playback position advances — once per rendered frame. This is the primary hook for driving lyric animations. Inside this callback, query the current text unit at `position` using `player.video.findChar(position)` and update your visuals accordingly.
+
+<ParamField path="position" type="number">
+  Current playback position in milliseconds.
+</ParamField>
+
+### onThrottledTimeUpdate
+
+```typescript
+onThrottledTimeUpdate?(position: number): void
+```
+
+A throttled version of `onTimeUpdate`. Fires at a lower frequency controlled by `PlayerOptions.throttleInterval`. Use this for UI elements that do not need per-frame precision — for example, updating a progress bar or a lyrics text overlay.
+
+<ParamField path="position" type="number">
+  Current playback position in milliseconds.
+</ParamField>
+
+### onMediaSeek
+
+```typescript
+onMediaSeek?(position: number): void
+```
+
+Called when the underlying media playback position changes (e.g. the audio source seeks).
+
+<ParamField path="position" type="number">
+  New media position in milliseconds.
+</ParamField>
+
+### onVideoSeekStart
+
+```typescript
+onVideoSeekStart?(): void
+```
+
+Called when a video seek operation begins. While seeking, `onTimeUpdate` is suppressed. Useful for pausing canvas animations during a scrub.
+
+### onVideoSeek
+
+```typescript
+onVideoSeek?(position: number): void
+```
+
+Called each time the video position is updated during an active seek operation.
+
+<ParamField path="position" type="number">
+  Video position in milliseconds during the seek.
+</ParamField>
+
+### onVideoSeekEnd
+
+```typescript
+onVideoSeekEnd?(): void
+```
+
+Called when the seek operation completes and normal `onTimeUpdate` events resume.
+
+### onPlay
+
+```typescript
+onPlay?(): void
+```
+
+Called when playback starts.
+
+### onPause
+
+```typescript
+onPause?(): void
+```
+
+Called when playback is paused.
+
+### onStop
+
+```typescript
+onStop?(): void
+```
+
+Called when playback stops (paused and rewound to the beginning).
+
+### onSeek
+
+```typescript
+onSeek?(position: number): void
+```
+
+Called when the user manually initiates a seek (e.g. by dragging a seekbar).
+
+<ParamField path="position" type="number">
+  Target position in milliseconds.
+</ParamField>
+
+### onSeekComplete
+
+```typescript
+onSeekComplete?(position: number): void
+```
+
+Called after a user-initiated seek completes successfully.
+
+<ParamField path="position" type="number">
+  Final position in milliseconds after the seek.
+</ParamField>
+
+### onDispose
+
+```typescript
+onDispose?(): void
+```
+
+Called when the player is destroyed via `player.dispose()`. Use this to release any resources your app has allocated.
+
+---
+
+## PlayerAppListener callbacks
+
+These callbacks track the lifecycle of your lyric app's connection to the TextAlive API server and an optional host.
+
+### onAppLoad
+
+```typescript
+onAppLoad?(app: IPlayerApp, error?: string): void
+```
+
+Called when the player finishes communicating with the TextAlive API server during initialization.
+
+<ParamField path="app" type="IPlayerApp">
+  The app object, including connection status, song URL, and parameter values.
+</ParamField>
+
+<ParamField path="error" type="string">
+  If the connection to the API server failed, this contains a human-readable error message.
+</ParamField>
+
+### onAppReady
+
+```typescript
+onAppReady?(app: IPlayerApp): void
+```
+
+Called when the app has finished connecting to a lyric app host (or determined it is running standalone). Check `app.managed` here to decide whether to load a song manually.
+
+<ParamField path="app" type="IPlayerApp">
+  The app object. When `app.managed` is `false`, no host is connected and you should call `player.createFromSongUrl()` yourself.
+</ParamField>
+
+### onAppParameterUpdate
+
+```typescript
+onAppParameterUpdate?(name: string, value: ParameterValue): void
+```
+
+Called when the host updates one of the app's declared parameters.
+
+<ParamField path="name" type="string">
+  The name of the parameter that was updated, matching one of the `name` fields in your `PlayerAppOptions.parameters` array.
+</ParamField>
+
+<ParamField path="value" type="ParameterValue">
+  The new value. Type is `IColor | string | number | boolean` depending on the parameter widget.
+</ParamField>
+
+### onAppMediaChange
+
+```typescript
+onAppMediaChange?(songUrl: string, videoPromise?: Promise<IVideo>): void
+```
+
+Called when the host changes the song URL. The player automatically starts loading the new song.
+
+<ParamField path="songUrl" type="string">
+  The new song URL provided by the host.
+</ParamField>
+
+<ParamField path="videoPromise" type="Promise<IVideo>">
+  A promise that resolves when the video object and timer are both ready. Await this to know when you can safely access lyrics data.
+</ParamField>
+
+---
+
+## LoaderListener callbacks
+
+`LoaderListener` is itself a combination of `DataLoaderListener` (= `VideoLoaderListener & SongLoaderListener & TextLoaderListener & FontLoaderListener`) and additional internal listeners.
+
+### onFontsLoad
+
+```typescript
+onFontsLoad?(fonts: FontInfo[], reason?: FontLoadingError): void
+```
+
+Called when font loading completes.
+
+<ParamField path="fonts" type="FontInfo[]">
+  The list of fonts that were successfully loaded.
+</ParamField>
+
+<ParamField path="reason" type="FontLoadingError">
+  Present when one or more fonts failed to load. The `reason.fonts` array lists the fonts that could not be loaded.
+</ParamField>
+
+### SongLoaderListener events
+
+| Callback | When it fires |
+|---|---|
+| `onSongLoad(song, reason?)` | Song metadata is loaded |
+| `onSongMapLoad(songMap, reason?)` | Beat, chord, and segment data is loaded |
+| `onVocalAmplitudeLoad(data, reason?)` | Vocal amplitude data is loaded (requires `vocalAmplitudeEnabled: true`) |
+| `onValenceArousalLoad(data, reason?)` | Valence/arousal data is loaded (requires `valenceArousalEnabled: true`) |
+
+### TextLoaderListener events
+
+| Callback | When it fires |
+|---|---|
+| `onLyricsLoad(lyrics, reason?)` | Lyrics timing information is loaded |
+| `onTextLoad(lyricsBody, reason?)` | Lyrics text content is loaded |
+
+---
+
+## Complete listener example
+
+The following example shows a listener object implementing multiple callbacks to manage the app state:
+
+```typescript
+import { Player, IVideo, IPlayerApp, Timer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  mediaElement: document.querySelector("#media"),
+});
+
+const listener = {
+  // App lifecycle
+  onAppReady(app: IPlayerApp) {
+    if (!app.managed) {
+      // Running standalone — load a song directly
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+    }
+  },
+
+  // Data loading
+  onVideoReady(v: IVideo) {
+    console.log(`Loaded ${v.charCount} characters across ${v.phraseCount} phrases`);
+  },
+
+  onTimerReady(timer: Timer) {
+    console.log("Ready to play");
+    // Enable your play button here
+  },
+
+  // Playback
+  onPlay() {
+    console.log("Playback started");
+  },
+
+  onPause() {
+    console.log("Playback paused");
+  },
+
+  onTimeUpdate(position: number) {
+    // Called every frame — drive your animation here
+    const char = player.video?.findChar(position);
+    if (char) {
+      updateDisplay(char.text);
+    }
+  },
+
+  onDispose() {
+    // Clean up any resources
+  },
+};
+
+player.addListener(listener);
+```

@@ -1,0 +1,232 @@
+---
+title: "Repetitive segments (IRepetitiveSegment)"
+description: "Represents a structurally repeated section in the music such as a chorus or verse, with timing and group metadata."
+---
+
+TextAlive exposes two related types for structural repetition in music:
+
+- **`IRepetitiveSegment`** — a single occurrence of a repeated section (e.g., one chorus).
+- **`IRepetitiveSegments`** — a group of same-type segments (e.g., all choruses in the song).
+
+Both come from Songle's structural analysis. After `onVideoReady`, the full list of groups is at `player.data.songMap.segments`. Chorus-only segments can be fetched via `player.getChoruses()`.
+
+## IRepetitiveSegment properties
+
+### TimedObject base
+
+<ResponseField name="startTime" type="number">
+  When this segment starts, in milliseconds.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  When this segment ends, in milliseconds.
+</ResponseField>
+
+### Segment-specific
+
+<ResponseField name="duration" type="number">
+  Duration of this segment in milliseconds (`endTime - startTime`). Read-only.
+</ResponseField>
+
+<ResponseField name="index" type="number">
+  Zero-indexed position of this segment within its parent `IRepetitiveSegments` group.
+</ResponseField>
+
+<ResponseField name="previous" type="IRepetitiveSegment">
+  The previous segment in the same group. `null` for the first segment in the group.
+</ResponseField>
+
+<ResponseField name="next" type="IRepetitiveSegment">
+  The next segment in the same group. `null` for the last segment in the group.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="progress(time)" type="number">
+  Maps the given playback position `time` (in ms) to a `[0, 1]` value representing progress through this segment.
+
+  - `0.0` — beginning of the segment
+  - `1.0` — end of the segment
+
+  <ParamField query="time" type="number" required>
+    Current playback position in milliseconds.
+  </ParamField>
+</ResponseField>
+
+## IRepetitiveSegments properties
+
+`IRepetitiveSegments` groups all occurrences of one structural type (e.g., all choruses).
+
+<ResponseField name="chorus" type="boolean">
+  `true` if this group represents chorus sections. `false` for other repetitive structures such as verses or bridges.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  The canonical duration shared by all segments in this group, in milliseconds.
+</ResponseField>
+
+<ResponseField name="segments" type="IRepetitiveSegment[]">
+  The individual segment occurrences that belong to this group, sorted by `startTime`.
+</ResponseField>
+
+## Player query methods
+
+### getChoruses
+
+```typescript
+player.getChoruses(): IRepetitiveSegment[]
+```
+
+Returns a flat array of all chorus `IRepetitiveSegment` objects across all chorus groups. Returns an empty array if no chorus is detected.
+
+### findChorus
+
+```typescript
+player.findChorus(time: number, options?: PlayerFindOptions): IRepetitiveSegment
+```
+
+Finds the chorus segment that contains (or is nearest to) the given `time`. Returns `null` if the current position is not inside any chorus.
+
+<ParamField query="time" type="number" required>
+  Playback position in milliseconds.
+</ParamField>
+
+<ParamField query="options" type="PlayerFindOptions">
+  Optional search parameters. `PlayerFindOptions` is an alias for `FindTimedObjectOptions`:
+
+  ```typescript
+  type PlayerFindOptions =
+    | { endTime?: number }   // match a segment overlapping a range
+    | { loose?: boolean };   // always return nearest binary search result
+  ```
+</ParamField>
+
+### findChorusChange
+
+```typescript
+player.findChorusChange(
+  startTime: number,
+  endTime: number
+): TimedObjectsInRange<IRepetitiveSegment>
+```
+
+Looks for chorus transitions within the given time range. Returns a `TimedObjectsInRange<IRepetitiveSegment>` with `entered`, `left`, `current`, `previous`, and `next`.
+
+<ParamField query="startTime" type="number" required>
+  Start of the query range in milliseconds.
+</ParamField>
+
+<ParamField query="endTime" type="number" required>
+  End of the query range in milliseconds.
+</ParamField>
+
+<Note>
+  `findChorusBetween(startTime, endTime)` is deprecated. Use `findChorusChange(startTime, endTime)` or `findChorus(time)` instead.
+</Note>
+
+## Accessing all segment groups
+
+`player.data.songMap.segments` holds all `IRepetitiveSegments` groups, not just choruses. You can inspect each group's `chorus` flag to categorize them:
+
+```typescript
+player.addListener({
+  onVideoReady() {
+    const { segments } = player.data.songMap;
+
+    for (const group of segments) {
+      console.log(
+        group.chorus ? "Chorus group" : "Non-chorus group",
+        `— ${group.segments.length} occurrences,`,
+        `each ~${group.duration}ms`
+      );
+
+      for (const seg of group.segments) {
+        console.log(
+          `  Segment ${seg.index}: ${seg.startTime}ms – ${seg.endTime}ms`
+        );
+      }
+    }
+  },
+});
+```
+
+## Example: highlight the screen during chorus
+
+Change the background and show a label whenever a chorus section is active:
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-token" },
+});
+
+const overlay = document.getElementById("chorus-overlay")!;
+
+player.addListener({
+  onVideoReady() {
+    const choruses = player.getChoruses();
+    console.log(`Found ${choruses.length} chorus section(s)`);
+  },
+
+  onTimeUpdate(position: number) {
+    const chorusChange = player.findChorusChange(
+      player.videoPosition,
+      position
+    );
+
+    // A chorus section just started
+    for (const seg of chorusChange.entered) {
+      overlay.classList.add("active");
+      overlay.textContent = `Chorus ${seg.index + 1}`;
+      console.log(
+        `Chorus ${seg.index} started at ${seg.startTime}ms` +
+        ` (progress: ${(seg.progress(position) * 100).toFixed(1)}%)`
+      );
+    }
+
+    // A chorus section just ended
+    for (const _seg of chorusChange.left) {
+      overlay.classList.remove("active");
+      overlay.textContent = "";
+    }
+  },
+});
+```
+
+```css
+#chorus-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: rgba(255, 200, 0, 0.3);
+  padding: 8px;
+  text-align: center;
+  font-weight: bold;
+  display: none;
+  transition: opacity 0.3s;
+}
+
+#chorus-overlay.active {
+  display: block;
+}
+```
+
+## Using progress() within a segment
+
+You can use `segment.progress(position)` to animate elements that run through the duration of a structural section:
+
+```typescript
+player.addListener({
+  onTimeUpdate(position: number) {
+    const chorus = player.findChorus(position);
+
+    if (chorus) {
+      // How far through the current chorus are we?
+      const t = chorus.progress(position); // [0, 1]
+
+      // E.g., move a progress bar across the chorus duration
+      progressBar.style.width = `${t * 100}%`;
+    }
+  },
+});
+```

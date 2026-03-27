@@ -1,0 +1,291 @@
+---
+title: "Lyrics units"
+description: "TextAlive structures synchronized lyrics as a four-level hierarchy: IVideo → IPhrase → IWord → IChar. Each level inherits from IRenderingUnit and carries precise timing information."
+---
+
+## The hierarchy
+
+When a song is loaded, TextAlive parses the lyrics and builds a tree of
+**rendering units**. Each node in the tree has a `startTime` and `endTime`
+(in milliseconds) derived from the vocalization-timing analysis.
+
+```
+IVideo
+└── IPhrase[]          "Hello world,"
+    └── IWord[]        "Hello"  "world,"
+        └── IChar[]    "H" "e" "l" "l" "o"   ","
+```
+
+You access the root via `player.video` (type `IVideo`).
+
+## IRenderingUnit — the base interface
+
+Every node in the hierarchy implements `IRenderingUnit`.
+
+```typescript
+interface IRenderingUnit extends TimedObject {
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly duration: number;       // endTime - startTime [ms]
+  readonly parent: IRenderingUnit;
+  readonly children: IRenderingUnit[];
+  readonly previous: IRenderingUnit;
+  readonly next: IRenderingUnit;
+
+  progress(time: number): number;  // maps time → [0, 1] within this unit
+  getType(): number;               // see UnitTypes
+
+  // Custom animation override (see below)
+  animate: RenderingUnitFunction;
+}
+```
+
+### UnitTypes
+
+`getType()` returns one of the numeric constants in `UnitTypes`:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `UnitTypes.PHRASE` | `1` | `IPhrase` |
+| `UnitTypes.WORD` | `2` | `IWord` |
+| `UnitTypes.CHAR` | `3` | `IChar` |
+| `UnitTypes.GRAPHIC` | `4` | Graphic unit |
+
+```typescript
+import { UnitTypes } from "textalive-app-api";
+
+if (unit.getType() === UnitTypes.CHAR) {
+  console.log((unit as IChar).text);
+}
+```
+
+### The `animate` property
+
+When you assign a function to a unit's `animate` property, TextAlive's default
+template animation for that unit is **suppressed** and your function is called
+instead on every render frame while the unit is active.
+
+```typescript
+type RenderingUnitFunction = (now: number, unit: IRenderingUnit) => void;
+```
+
+```typescript
+player.addListener({
+  onVideoReady(video) {
+    // Override animation for every character
+    video.chars.forEach((char) => {
+      char.animate = (now, u) => {
+        const t = u.progress(now); // 0 → 1
+        myRender(u as IChar, t);
+      };
+    });
+  },
+});
+```
+
+<Warning>
+  Setting `animate` on a unit prevents TextAlive's built-in template from
+  rendering that unit. Remove the assignment (set to `null`) to restore
+  default behaviour.
+</Warning>
+
+## IVideo
+
+`IVideo` is the root container. You access it via `player.video`.
+
+```typescript
+interface IVideo extends TimedObject {
+  readonly phrases: IPhrase[];
+  readonly words: IWord[];          // flat list across all phrases
+  readonly chars: IChar[];          // flat list across all words
+
+  readonly phraseCount: number;
+  readonly wordCount: number;
+  readonly charCount: number;
+
+  readonly firstPhrase: IPhrase;
+  readonly lastPhrase: IPhrase;
+  readonly firstWord: IWord;
+  readonly lastWord: IWord;
+  readonly firstChar: IChar;
+  readonly lastChar: IChar;
+
+  getPhrase(index: number): IPhrase;
+  getWord(index: number): IWord;
+  getChar(index: number): IChar;
+
+  findPhrase(time: number, options?: FindTimedObjectOptions): IPhrase;
+  findWord(time: number, options?: FindTimedObjectOptions): IWord;
+  findChar(time: number, options?: FindTimedObjectOptions): IChar;
+
+  findPhraseChange(startTime: number, endTime: number): TimedObjectsInRange<IPhrase>;
+  findWordChange(startTime: number, endTime: number): TimedObjectsInRange<IWord>;
+  findCharChange(startTime: number, endTime: number): TimedObjectsInRange<IChar>;
+
+  progress(time: number): number;
+}
+```
+
+The `find*Change` methods return a `TimedObjectsInRange` object which tells
+you exactly what changed in a given time window — which units started
+(`entered`), which ended (`left`), and which is currently active (`current`).
+This is the recommended pattern inside `onTimeUpdate`.
+
+## IPhrase
+
+A `IPhrase` represents a sung line or grouping of words that are vocalized
+together.
+
+```typescript
+interface IPhrase extends IRenderingUnit {
+  readonly text: string;         // full text of the phrase
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly children: IWord[];    // words in this phrase
+  readonly wordCount: number;
+  readonly charCount: number;
+  readonly firstWord: IWord;
+  readonly lastWord: IWord;
+  readonly firstChar: IChar;
+  readonly lastChar: IChar;
+  readonly previous: IPhrase;
+  readonly next: IPhrase;
+}
+```
+
+## IWord
+
+A `IWord` represents a single word within a phrase. Each word knows its
+part-of-speech and the language it belongs to.
+
+```typescript
+interface IWord extends IRenderingUnit {
+  readonly text: string;
+  readonly parent: IPhrase;
+  readonly children: IChar[];    // characters in this word
+  readonly charCount: number;
+  readonly firstChar: IChar;
+  readonly lastChar: IChar;
+  readonly previous: IWord;
+  readonly next: IWord;
+
+  // Part-of-speech (normalised)
+  // N=Noun, PN=ProNoun, V=Verb, R=adveRb, J=adJective, A=Adnominal,
+  // P=Particle, M=Modal, W=Wh, D=Determiner, I=conjunction,
+  // U=Interjection, F=preFix, S=Symbol, X=other
+  readonly pos: string;
+
+  // Raw POS tag from NLTK (English) or MeCab (Japanese)
+  readonly rawPos: string;
+
+  // Language code: "en" or "ja"
+  readonly language: string;
+}
+```
+
+**Part-of-speech codes** at a glance:
+
+| Code | Name | Code | Name |
+|---|---|---|---|
+| `N` | Noun | `P` | Particle |
+| `PN` | ProNoun | `M` | Modal |
+| `V` | Verb | `W` | Wh-word |
+| `R` | Adverb | `D` | Determiner |
+| `J` | Adjective | `U` | Interjection |
+| `A` | Adnominal | `F` | Prefix |
+| `I` | Conjunction | `S` | Symbol |
+| `X` | Other | | |
+
+## IChar
+
+A `IChar` is the finest-grained unit — a single character. In addition to
+timing, each char carries visual styling properties.
+
+```typescript
+interface IChar extends IRenderingUnit {
+  readonly text: string;
+  readonly parent: IWord;
+  readonly previous: IChar;
+  readonly next: IChar;
+
+  // Visual properties (read/write)
+  font: IFont;
+  fontFamily: string;
+  fontStyle: string;
+  fontSize: number;     // px
+  color: IColor;        // RGBA color
+}
+```
+
+## Examples
+
+### Display the current character
+
+```typescript
+player.addListener({
+  onTimeUpdate(position) {
+    const char = player.video.findChar(position);
+    if (char) {
+      myDisplay.textContent = char.text;
+      // char.progress(position) gives 0→1 across its duration
+    }
+  },
+});
+```
+
+### Detect when a new phrase starts
+
+```typescript
+let prevPosition = 0;
+
+player.addListener({
+  onTimeUpdate(position) {
+    const changes = player.video.findPhraseChange(prevPosition, position);
+
+    changes.entered.forEach((phrase) => {
+      console.log("Phrase started:", phrase.text);
+    });
+
+    changes.left.forEach((phrase) => {
+      console.log("Phrase ended:", phrase.text);
+    });
+
+    prevPosition = position;
+  },
+});
+```
+
+### Walk all characters at startup
+
+```typescript
+player.addListener({
+  onVideoReady(video) {
+    for (const phrase of video.phrases) {
+      for (const word of phrase.children) {
+        for (const char of word.children) {
+          console.log(
+            `${char.text} [${char.startTime}ms – ${char.endTime}ms]`
+          );
+        }
+      }
+    }
+  },
+});
+```
+
+### Highlight nouns differently
+
+```typescript
+player.addListener({
+  onTimeUpdate(position) {
+    const word = player.video.findWord(position);
+    if (word && word.pos === "N") {
+      highlight(word);
+    }
+  },
+});
+```
+
+---
+
+Full type references: [/api/video](/api/video) · [/api/phrase](/api/phrase) · [/api/word](/api/word) · [/api/char](/api/char)

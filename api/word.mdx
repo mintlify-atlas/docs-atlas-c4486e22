@@ -1,0 +1,238 @@
+---
+title: 'Word (IWord)'
+description: 'A timed lyrics word with part-of-speech tagging and character children.'
+keywords: ['IWord', 'word', 'lyrics', 'part of speech', 'pos', 'text unit', 'rendering unit']
+---
+
+`IWord` represents a single word within a phrase. It extends `ITextUnit` → `IRenderingUnit`, and carries part-of-speech information useful for language-aware styling.
+
+**Inheritance chain:** `IWord` → `ITextUnit` → `IRenderingUnit` → `TimedObject`
+
+```typescript
+export declare interface IWord extends ITextUnit {
+  readonly parent: IPhrase;
+  readonly children: IChar[];
+  readonly previous: IWord;
+  readonly next: IWord;
+  readonly pos: string;
+  readonly rawPos: string;
+  readonly language: string;
+  readonly charCount: number;
+  readonly firstChar: IChar;
+  readonly lastChar: IChar;
+  findIndex(unit: IChar): number;
+}
+```
+
+## IWord properties
+
+<ResponseField name="parent" type="IPhrase">
+  The phrase that contains this word.
+</ResponseField>
+
+<ResponseField name="children" type="IChar[]">
+  The characters that make up this word, in order.
+</ResponseField>
+
+<ResponseField name="previous" type="IWord">
+  The word immediately before this one within the video, or `null` if this is the first word.
+</ResponseField>
+
+<ResponseField name="next" type="IWord">
+  The word immediately after this one within the video, or `null` if this is the last word.
+</ResponseField>
+
+<ResponseField name="pos" type="string">
+  Normalized part-of-speech abbreviation.
+
+  <Expandable title="POS codes">
+    | Code | Part of speech |
+    |------|----------------|
+    | `N`  | Noun |
+    | `PN` | Pronoun |
+    | `V`  | Verb |
+    | `R`  | Adverb |
+    | `J`  | Adjective |
+    | `A`  | Adnominal adjective |
+    | `P`  | Particle |
+    | `M`  | Modal |
+    | `W`  | Wh-word |
+    | `D`  | Determiner |
+    | `I`  | Conjunction |
+    | `U`  | Interjection |
+    | `F`  | Prefix |
+    | `S`  | Symbol |
+    | `X`  | Other |
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="rawPos" type="string">
+  The raw part-of-speech tag as returned by the underlying NLP library — NLTK for English, MeCab for Japanese.
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  The language of this word. Either `"en"` (English) or `"ja"` (Japanese).
+</ResponseField>
+
+<ResponseField name="charCount" type="number">
+  Number of characters in this word.
+</ResponseField>
+
+<ResponseField name="firstChar" type="IChar">
+  The first character in this word.
+</ResponseField>
+
+<ResponseField name="lastChar" type="IChar">
+  The last character in this word.
+</ResponseField>
+
+## IWord methods
+
+### findIndex
+
+Returns the index of a character within this word.
+
+<ParamField path="unit" type="IChar" required>
+  The character whose index you want.
+</ParamField>
+
+**Returns** `number`
+
+---
+
+## Inherited from ITextUnit
+
+<ResponseField name="text" type="string">
+  The plain text of this word.
+</ResponseField>
+
+---
+
+## Inherited from IRenderingUnit
+
+<ResponseField name="startTime" type="number">
+  Start time of this word in milliseconds.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  End time of this word in milliseconds.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  Duration of this word in milliseconds.
+</ResponseField>
+
+<ResponseField name="animate" type="RenderingUnitFunction">
+  Assign a function here to override the default template animation for this word.
+</ResponseField>
+
+### progress
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+**Returns** `number` — `[0, 1]` position within this word's time span.
+
+### getType
+
+**Returns** `number` — always `2` (`UnitTypes.WORD`) for words.
+
+---
+
+## WordData
+
+`WordData` is the serialization format used when building video data from JSON.
+
+```typescript
+export declare interface WordData extends UnitData {
+  characters: CharData[];
+  pos?: string;
+  rawPoS?: string;
+  language?: string;
+}
+
+export declare interface UnitData {
+  startTime?: number;
+  endTime?: number;
+}
+```
+
+<Expandable title="WordData properties">
+  <ResponseField name="characters" type="CharData[]">
+    The character data objects that make up this word.
+  </ResponseField>
+  <ResponseField name="pos" type="string">
+    Optional normalized POS tag.
+  </ResponseField>
+  <ResponseField name="rawPoS" type="string">
+    Optional raw POS tag from NLTK or MeCab.
+  </ResponseField>
+  <ResponseField name="language" type="string">
+    Optional language code (`"en"` or `"ja"`).
+  </ResponseField>
+  <ResponseField name="startTime" type="number">
+    Optional override for word start time [ms].
+  </ResponseField>
+  <ResponseField name="endTime" type="number">
+    Optional override for word end time [ms].
+  </ResponseField>
+</Expandable>
+
+---
+
+## Examples
+
+### Check POS and apply different styles to nouns
+
+```typescript
+player.addListener({
+  onTimeUpdate(position: number) {
+    const word = player.video.findWord(position);
+    if (!word) return;
+
+    const el = document.getElementById('word-display')!;
+    el.textContent = word.text;
+
+    if (word.pos === 'N') {
+      // Highlight nouns in a distinct colour
+      el.style.color = '#ff6b6b';
+    } else if (word.pos === 'V') {
+      // Style verbs differently
+      el.style.color = '#4ecdc4';
+    } else {
+      el.style.color = '#ffffff';
+    }
+  }
+});
+```
+
+### Iterate word.children to animate individual characters
+
+```typescript
+player.addListener({
+  onVideoReady(v: IVideo) {
+    // Attach a per-character animate function via each word
+    for (const phrase of v.phrases) {
+      for (const word of phrase.children) {
+        for (const char of word.children) {
+          char.animate = (now: number, u: IRenderingUnit) => {
+            const p = char.progress(now); // [0, 1]
+            animateCharacter(char, p);
+          };
+        }
+      }
+    }
+  }
+});
+
+function animateCharacter(char: IChar, progress: number) {
+  // Example: fade in during the first 20% of the character's duration
+  const opacity = Math.min(progress / 0.2, 1);
+  // Apply to your canvas or DOM element...
+}
+```
+
+<Note>
+  `word.children` and `word.charCount` give you direct access to the characters within a word without traversing the full video character list.
+</Note>

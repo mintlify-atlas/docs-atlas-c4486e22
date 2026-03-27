@@ -1,0 +1,759 @@
+---
+title: "Player"
+description: "Main entry point to the TextAlive App API. Loads song maps, lyrics, and timing data, and provides APIs for multimedia performance synchronized with music playback."
+---
+
+`Player` is the primary class in the TextAlive App API. It implements the [`IPlayer`](#iplayer-interface) interface and serves as the single entry point for loading songs, managing playback, and querying musical data.
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-developer-token" },
+});
+```
+
+## Constructor
+
+```typescript
+new Player(options?: PlayerOptions)
+```
+
+<ParamField path="options" type="PlayerOptions">
+  Initialization options for the player. See [PlayerOptions](/api/player-options) for the full reference.
+</ParamField>
+
+## Properties
+
+### options
+
+```typescript
+readonly options: PlayerOptions
+```
+
+The options object passed to the constructor. See [PlayerOptions](/api/player-options).
+
+---
+
+### app
+
+```typescript
+readonly app: IPlayerApp
+```
+
+Current lyric app status, including connection state, host information, and parameter values provided by the TextAlive host.
+
+---
+
+### data
+
+```typescript
+readonly data: IDataLoader
+```
+
+Access to loaded song data: song map, lyrics text, timing information, and font loading status.
+
+---
+
+### video
+
+```typescript
+readonly video: IVideo
+```
+
+The current video object containing all phrase, word, and character rendering units.
+
+---
+
+### mediaElement
+
+```typescript
+mediaElement: HTMLElement  // get / set
+```
+
+The DOM element that hosts the audio source. You can assign a new element at any time.
+
+---
+
+### mediaSourceElement
+
+```typescript
+readonly mediaSourceElement: HTMLElement
+```
+
+The direct parent DOM element for the embedded audio source element.
+
+---
+
+### mediaBannerElement
+
+```typescript
+readonly mediaBannerElement: HTMLElement
+```
+
+The DOM element where the player attribution banner is rendered. See [`banner`](#banner).
+
+---
+
+### mediaPosition
+
+```typescript
+readonly mediaPosition: number
+```
+
+Current media playback position in milliseconds. Updated periodically by the active `Timer` implementation.
+
+---
+
+### videoPosition
+
+```typescript
+readonly videoPosition: number
+```
+
+Current video rendering position in milliseconds. Updated after each successful render frame.
+
+---
+
+### wait
+
+```typescript
+wait: number  // get / set
+```
+
+The interval between render frames in milliseconds. Inversely related to [`fps`](#fps).
+
+---
+
+### fps
+
+```typescript
+fps: number  // get / set
+```
+
+Frames per second for video rendering. Setting this also updates [`wait`](#wait).
+
+---
+
+### isLoading
+
+```typescript
+readonly isLoading: boolean
+```
+
+`true` while song information, lyrics, or other video data is being loaded.
+
+---
+
+### isPlaying
+
+```typescript
+readonly isPlaying: boolean
+```
+
+`true` while the song is actively playing.
+
+---
+
+### isVideoSeeking
+
+```typescript
+readonly isVideoSeeking: boolean
+```
+
+`true` during an active seek operation. While seeking:
+- [`onTimeUpdate`](/api/player-events#ontimeupdate) events are suppressed.
+- [`mediaPosition`](#mediaposition) continues to update without triggering new render frames.
+
+Use [`startVideoSeek`](#startvideoseek) and [`endVideoSeek`](#endvideoseek) to control this state when implementing a seekbar.
+
+---
+
+### banner
+
+```typescript
+readonly banner: IPlayerBanner
+```
+
+The banner instance that renders attribution info (TextAlive logo, song link, lyrics link) inside [`mediaElement`](#mediaelement).
+
+---
+
+### timer
+
+```typescript
+readonly timer: Timer
+```
+
+The active `Timer` instance managing playback state. By default, `SongleTimer` is used. You can provide a custom timer via [`PlayerOptions.timer`](/api/player-options#timer).
+
+---
+
+### volume
+
+```typescript
+volume: number  // get / set  [0-100]
+```
+
+Playback volume. Accepts values from `0` (silent) to `100` (full volume).
+
+---
+
+## Methods
+
+### addListener
+
+Registers an event listener to receive player callbacks.
+
+```typescript
+addListener(listener: PlayerListener): void
+```
+
+<ParamField path="listener" type="PlayerListener" required>
+  An object implementing one or more of the callback interfaces. See [Player events](/api/player-events).
+</ParamField>
+
+---
+
+### removeListener
+
+Removes a previously registered event listener.
+
+```typescript
+removeListener(listener: PlayerListener): boolean
+```
+
+<ParamField path="listener" type="PlayerListener" required>
+  The listener to remove.
+</ParamField>
+
+<ResponseField name="returns" type="boolean">
+  `true` if the listener was found and removed; `false` otherwise.
+</ResponseField>
+
+---
+
+### createFromSongUrl
+
+Loads song map, lyrics, and timing data from a song URL, then constructs a video object.
+
+```typescript
+createFromSongUrl(songUrl: string, options?: PlayerVideoOptions): Promise<IVideo>
+```
+
+<ParamField path="songUrl" type="string" required>
+  A full song URL (e.g., a Songle or piapro URL).
+</ParamField>
+
+<ParamField path="options" type="PlayerVideoOptions">
+  Optional overrides for video data. See [PlayerVideoOptions](/api/player-options#playervideoptions).
+</ParamField>
+
+<ResponseField name="returns" type="Promise<IVideo>">
+  Resolves with the constructed video object.
+</ResponseField>
+
+---
+
+### createFromSongPath
+
+Like `createFromSongUrl`, but accepts a path (the URL without the `https://` protocol prefix).
+
+```typescript
+createFromSongPath(songPath: string, options?: PlayerVideoOptions): Promise<IVideo>
+```
+
+<ParamField path="songPath" type="string" required>
+  A song path string (e.g., `"piapro.jp/t?id=..."`).
+</ParamField>
+
+<ParamField path="options" type="PlayerVideoOptions">
+  Optional overrides for video data.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<IVideo>">
+  Resolves with the constructed video object.
+</ResponseField>
+
+---
+
+### createFromText
+
+Generates a dummy song map and video object from plain text. Useful for testing without a real song.
+
+```typescript
+createFromText(text: string, options?: PlayerVideoOptions): Promise<IVideo>
+```
+
+<ParamField path="text" type="string" required>
+  Plain text to use as lyrics.
+</ParamField>
+
+<ParamField path="options" type="PlayerVideoOptions">
+  Optional overrides for video data.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<IVideo>">
+  Resolves with the constructed video object.
+</ResponseField>
+
+---
+
+### createFromJSON
+
+Constructs a video object directly from a `VideoData` JSON object.
+
+```typescript
+createFromJSON(json: VideoData, options?: PlayerVideoOptions): Promise<IVideo>
+```
+
+<ParamField path="json" type="VideoData" required>
+  A `VideoData` object describing phrases and timing.
+</ParamField>
+
+<ParamField path="options" type="PlayerVideoOptions">
+  Optional overrides for video data.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<IVideo>">
+  Resolves with the constructed video object.
+</ResponseField>
+
+---
+
+### getChoruses
+
+Returns all chorus (repetitive) segments detected in the current song.
+
+```typescript
+getChoruses(): IRepetitiveSegment[]
+```
+
+<ResponseField name="returns" type="IRepetitiveSegment[]">
+  Array of chorus segments. Returns an empty array if none are found.
+</ResponseField>
+
+---
+
+### findChorus
+
+Finds the chorus segment that overlaps with the specified playback position.
+
+```typescript
+findChorus(time: number, options?: PlayerFindOptions): IRepetitiveSegment
+```
+
+<ParamField path="time" type="number" required>
+  Position in milliseconds.
+</ParamField>
+
+<ParamField path="options" type="PlayerFindOptions">
+  Optional search parameters (e.g., `endTime` for range overlap, `loose` for nearest-match).
+</ParamField>
+
+<ResponseField name="returns" type="IRepetitiveSegment | null">
+  The matching chorus segment, or `null` if none is found.
+</ResponseField>
+
+---
+
+### findChorusChange
+
+Looks for chorus segment transitions within a time range.
+
+```typescript
+findChorusChange(startTime: number, endTime: number): TimedObjectsInRange<IRepetitiveSegment>
+```
+
+<ParamField path="startTime" type="number" required>
+  Start of the time range in milliseconds.
+</ParamField>
+
+<ParamField path="endTime" type="number" required>
+  End of the time range in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="TimedObjectsInRange<IRepetitiveSegment>">
+  An object with `current`, `entered`, `left`, `previous`, and `next` fields describing segment transitions in the range.
+</ResponseField>
+
+---
+
+### getBeats
+
+Returns all beats in the current song.
+
+```typescript
+getBeats(): IBeat[]
+```
+
+<ResponseField name="returns" type="IBeat[]">
+  Array of beats. Returns an empty array if the song map is not loaded.
+</ResponseField>
+
+---
+
+### findBeat
+
+Finds the beat that overlaps with the specified position.
+
+```typescript
+findBeat(time: number, options?: PlayerFindOptions): IBeat
+```
+
+<ParamField path="time" type="number" required>
+  Position in milliseconds.
+</ParamField>
+
+<ParamField path="options" type="PlayerFindOptions">
+  Optional search parameters.
+</ParamField>
+
+<ResponseField name="returns" type="IBeat | null">
+  The matching beat, or `null` if none is found.
+</ResponseField>
+
+---
+
+### findBeatChange
+
+Looks for beat transitions within a time range.
+
+```typescript
+findBeatChange(startTime: number, endTime: number): TimedObjectsInRange<IBeat>
+```
+
+<ParamField path="startTime" type="number" required>
+  Start of the time range in milliseconds.
+</ParamField>
+
+<ParamField path="endTime" type="number" required>
+  End of the time range in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="TimedObjectsInRange<IBeat>">
+  Beat transitions in the specified range.
+</ResponseField>
+
+---
+
+### getChords
+
+Returns all chord progressions in the current song.
+
+```typescript
+getChords(): IChord[]
+```
+
+<ResponseField name="returns" type="IChord[]">
+  Array of chord objects. Returns an empty array if the song map is not loaded.
+</ResponseField>
+
+---
+
+### findChord
+
+Finds the chord progression that overlaps with the specified position.
+
+```typescript
+findChord(time: number, options?: PlayerFindOptions): IChord
+```
+
+<ParamField path="time" type="number" required>
+  Position in milliseconds.
+</ParamField>
+
+<ParamField path="options" type="PlayerFindOptions">
+  Optional search parameters.
+</ParamField>
+
+<ResponseField name="returns" type="IChord | null">
+  The matching chord, or `null` if none is found.
+</ResponseField>
+
+---
+
+### findChordChange
+
+Looks for chord progression transitions within a time range.
+
+```typescript
+findChordChange(startTime: number, endTime: number): TimedObjectsInRange<IChord>
+```
+
+<ParamField path="startTime" type="number" required>
+  Start of the time range in milliseconds.
+</ParamField>
+
+<ParamField path="endTime" type="number" required>
+  End of the time range in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="TimedObjectsInRange<IChord>">
+  Chord transitions in the specified range.
+</ResponseField>
+
+---
+
+### getVocalAmplitude
+
+Returns the vocal amplitude at the specified position.
+
+```typescript
+getVocalAmplitude(time: number): number
+```
+
+<Note>
+  You must set [`vocalAmplitudeEnabled: true`](/api/player-options#vocalamplitudeenabled) in `PlayerOptions` before loading a song for this method to return data.
+</Note>
+
+<ParamField path="time" type="number" required>
+  Position in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="number">
+  Vocal amplitude at the given time. Ranges from `0` to the value returned by [`getMaxVocalAmplitude()`](#getmaxvocalamplitude).
+</ResponseField>
+
+---
+
+### getMaxVocalAmplitude
+
+Returns the maximum vocal amplitude throughout the entire song.
+
+```typescript
+getMaxVocalAmplitude(): number
+```
+
+<Note>
+  Requires [`vocalAmplitudeEnabled: true`](/api/player-options#vocalamplitudeenabled) in `PlayerOptions`.
+</Note>
+
+<ResponseField name="returns" type="number">
+  Maximum vocal amplitude value in the song.
+</ResponseField>
+
+---
+
+### getValenceArousal
+
+Returns the valence/arousal coordinates at the specified position.
+
+```typescript
+getValenceArousal(time: number): ValenceArousalValue
+```
+
+<Note>
+  Requires [`valenceArousalEnabled: true`](/api/player-options#valencearousalenabled) in `PlayerOptions`.
+</Note>
+
+<ParamField path="time" type="number" required>
+  Position in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="ValenceArousalValue">
+  An object with `v` (valence) and `a` (arousal) properties, both in the range `[-1, 1]`.
+</ResponseField>
+
+---
+
+### getMedianValenceArousal
+
+Returns the median valence/arousal value across the entire song.
+
+```typescript
+getMedianValenceArousal(): ValenceArousalValue
+```
+
+<Note>
+  Requires [`valenceArousalEnabled: true`](/api/player-options#valencearousalenabled) in `PlayerOptions`.
+</Note>
+
+<ResponseField name="returns" type="ValenceArousalValue">
+  Median valence and arousal coordinates for the song.
+</ResponseField>
+
+---
+
+### setVideoPosition
+
+Sets the video rendering position to the specified time.
+
+```typescript
+setVideoPosition(position: number): Promise<number>
+```
+
+<ParamField path="position" type="number" required>
+  Target video position in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<number>">
+  Resolves with the actual position that was set.
+</ResponseField>
+
+---
+
+### requestPlay
+
+Starts or resumes music playback.
+
+```typescript
+requestPlay(): boolean
+```
+
+<ResponseField name="returns" type="boolean">
+  `true` if the play request was accepted.
+</ResponseField>
+
+---
+
+### requestStop
+
+Stops playback and seeks to the beginning.
+
+```typescript
+requestStop(): boolean
+```
+
+<ResponseField name="returns" type="boolean">
+  `true` if the stop request was accepted.
+</ResponseField>
+
+---
+
+### requestPause
+
+Pauses music playback at the current position.
+
+```typescript
+requestPause(): boolean
+```
+
+<ResponseField name="returns" type="boolean">
+  `true` if the pause request was accepted.
+</ResponseField>
+
+---
+
+### requestMediaSeek
+
+Seeks the media playback to the specified position.
+
+```typescript
+requestMediaSeek(position: number): boolean
+```
+
+<ParamField path="position" type="number" required>
+  Target media position in milliseconds.
+</ParamField>
+
+<ResponseField name="returns" type="boolean">
+  `true` if the seek request was accepted.
+</ResponseField>
+
+---
+
+### startVideoSeek
+
+Begins a video seek operation. Sets `isVideoSeeking` to `true` and suppresses `onTimeUpdate` events.
+
+```typescript
+startVideoSeek(): void
+```
+
+---
+
+### endVideoSeek
+
+Ends the video seek operation. Sets `isVideoSeeking` to `false` and resumes `onTimeUpdate` events.
+
+```typescript
+endVideoSeek(): void
+```
+
+---
+
+### requestStageUpdate
+
+Forces an immediate re-render of the current video frame.
+
+```typescript
+requestStageUpdate(): Promise<number>
+```
+
+<ResponseField name="returns" type="Promise<number>">
+  Resolves with the current video position in milliseconds.
+</ResponseField>
+
+---
+
+### dispose
+
+Destroys the player instance and releases all resources.
+
+```typescript
+dispose(): void
+```
+
+---
+
+## Deprecated methods
+
+<Warning>
+  The following methods are deprecated and will be removed in a future version.
+</Warning>
+
+| Method | Replacement |
+|--------|-------------|
+| `setMediaElement(element: HTMLElement)` | Assign to `player.mediaElement` directly |
+| `setMediaPosition(position: number)` | Use `requestMediaSeek(position)` instead |
+| `findChorusBetween(startTime, endTime)` | Use `findChorus(time, options)` instead |
+
+---
+
+## Usage example
+
+```typescript
+import { Player, PlayerListener, IVideo, Timer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-developer-token" },
+  mediaElement: document.getElementById("media"),
+});
+
+const listener: PlayerListener = {
+  onAppReady(app) {
+    if (!app.managed) {
+      // No host connected — load a song directly
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+    }
+  },
+
+  onVideoReady(video: IVideo) {
+    console.log("Video ready. Duration:", video.duration, "ms");
+  },
+
+  onTimerReady(timer: Timer) {
+    console.log("Timer ready:", timer);
+  },
+
+  onTimeUpdate(position: number) {
+    // Called every render frame
+    const beat = player.findBeat(position);
+    if (beat) {
+      const progress = beat.progress(position); // 0.0 → 1.0 within the beat
+      console.log(`Beat ${beat.index}, progress: ${progress.toFixed(2)}`);
+    }
+  },
+
+  onPlay() {
+    console.log("Playback started");
+  },
+
+  onStop() {
+    console.log("Playback stopped");
+  },
+};
+
+player.addListener(listener);
+```

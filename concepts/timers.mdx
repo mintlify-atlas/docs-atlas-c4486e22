@@ -1,0 +1,261 @@
+---
+title: "Timers"
+description: "The Timer interface decouples the Player from any specific audio backend. You can use the built-in BasicTimer for silent debugging or SongleTimer for full audio playback."
+---
+
+## What is a Timer?
+
+The `Timer` interface is the bridge between the audio engine and the `Player`.
+When the player needs to start, pause, stop, or seek audio it calls methods on
+the active `Timer` instance. In return, the timer calls back into the player
+through the `updater` function to report the current playback position.
+
+This design means you can swap out the audio backend entirely — for example,
+to drive the player from a Web Audio API clock, a video element, or a
+test harness — without changing any of your app code.
+
+## Timer interface
+
+```typescript
+interface Timer {
+  // State
+  readonly isPlaying: boolean;  // whether audio is currently playing
+  readonly position: number;    // current playback position [ms] — real-time calculation
+  wait: number;                 // interval between position updates [ms]
+
+  // Lifecycle
+  initialize(options: TimerInitOptions): Promise<void>;
+  dispose(): void;
+
+  // Playback control
+  play(): void;
+  pause(): void;
+  stop(): void;                 // pause and seek to the beginning
+  seek(position: number): void; // seek to position [ms]
+}
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `isPlaying` | `boolean` | `true` when the timer is actively advancing the playback position |
+| `position` | `number` | Current playback position in milliseconds. Timer implementations must compute this in real time; it is the most precise position source available |
+| `wait` | `number` | Desired interval between calls to the `updater` callback in milliseconds |
+
+<Note>
+  There are three position sources in the API: `timer.position` (most
+  precise, real-time), `player.mediaPosition` (updated periodically by the
+  timer), and `player.videoPosition` (updated after each rendered frame).
+  Use `timer.position` when you need sub-frame accuracy.
+</Note>
+
+### Methods
+
+| Method | Description |
+|---|---|
+| `initialize(options)` | Called once during video loading. The timer should set up its audio element here and resolve when ready |
+| `play()` | Start playback from the current position |
+| `pause()` | Pause playback; `position` stays at the current value |
+| `stop()` | Pause and seek back to position `0` |
+| `seek(position)` | Jump to `position` milliseconds |
+| `dispose()` | Release all resources held by this timer |
+
+## TimerInitOptions
+
+```typescript
+interface TimerInitOptions {
+  player: IPlayer;                             // the Player instance
+  updater: PlayerMediaPositionUpdateFunction;  // call this to push position updates
+  emitter: PlayerEventListener;                // use this to fire player events
+}
+```
+
+### PlayerMediaPositionUpdateFunction
+
+```typescript
+type PlayerMediaPositionUpdateFunction = (position: number) => Promise<number>;
+```
+
+The `updater` callback is called by your timer on a recurring schedule (every
+`wait` milliseconds). Pass the current playback position in milliseconds and
+await the resolved value, which is the position after any adjustments the
+player applied (e.g. clamping to song bounds). Your timer loop should use the
+resolved value when scheduling the next tick.
+
+## BasicTimer
+
+`BasicTimer` is the simplest `Timer` implementation bundled with the SDK. It:
+
+- Does **not** embed any audio element, so no sound plays
+- Advances position using `requestAnimationFrame` / `setTimeout`
+- Is useful for debugging visual animations without needing a media source
+
+```typescript
+import { Player, BasicTimer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  timer: new BasicTimer(),
+});
+```
+
+Because `BasicTimer` has no audio dependency, `onTimerReady` fires as soon as
+the video object is built, and you can call `player.requestPlay()` immediately
+after `onVideoReady`.
+
+<Tip>
+  During development, combine `BasicTimer` with `createFromText` to iterate
+  on your animation code without loading a real song or hitting the TextAlive
+  API.
+
+  ```typescript
+  const player = new Player({ timer: new BasicTimer() });
+  await player.createFromText("Hello world");
+  player.requestPlay();
+  ```
+</Tip>
+
+## SongleTimer
+
+`SongleTimer` is the full-featured timer that embeds a Songle audio player.
+It is the default timer used when you do not pass `timer` in `PlayerOptions`.
+
+`SongleTimer` is backed by the optional peer dependency `songle-api`. You do
+not need to install or import `songle-api` manually — the timer loads it
+automatically via dynamic `import()` or a `<script>` tag injection.
+
+```typescript
+import { Player, SongleTimer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  timer: new SongleTimer(),
+  mediaElement: document.querySelector("#media"),
+});
+```
+
+### SongleTimer options
+
+```typescript
+interface SongleTimerOptions {
+  headless?: boolean;      // true = do not embed audio (timer only, no sound)
+  accessToken?: string;    // Songle Sync access token
+  secretToken?: string;    // Songle Sync secret token
+  songle?: Songle;         // pre-initialised Songle API instance
+}
+```
+
+Passing `accessToken` and `secretToken` enables **Songle Sync**, which
+synchronises playback position across multiple clients in real time.
+
+After `onTimerReady` fires you can access the underlying Songle `Player`
+instance via `(player.timer as SongleTimer).songlePlayer` if you need to
+call Songle-specific APIs directly.
+
+## Implementing a custom Timer
+
+If you need to synchronise TextAlive with an external clock (e.g. a `<video>`
+element or a Web Audio API context), implement the `Timer` interface:
+
+```typescript
+import { Timer, TimerInitOptions } from "textalive-app-api";
+
+class VideoElementTimer implements Timer {
+  private _player: IPlayer | null = null;
+  private _updater: PlayerMediaPositionUpdateFunction | null = null;
+  private _video: HTMLVideoElement;
+  private _raf: number | null = null;
+
+  wait = 16; // ~60 fps
+
+  constructor(videoElement: HTMLVideoElement) {
+    this._video = videoElement;
+  }
+
+  get isPlaying() { return !this._video.paused; }
+  get position()  { return this._video.currentTime * 1000; }
+
+  async initialize({ player, updater }: TimerInitOptions) {
+    this._player  = player;
+    this._updater = updater;
+    this._scheduleUpdate();
+  }
+
+  play()  { this._video.play(); }
+  pause() { this._video.pause(); }
+  stop()  { this._video.pause(); this._video.currentTime = 0; }
+  seek(position: number) { this._video.currentTime = position / 1000; }
+
+  dispose() {
+    if (this._raf !== null) cancelAnimationFrame(this._raf);
+  }
+
+  private _scheduleUpdate() {
+    this._raf = requestAnimationFrame(async () => {
+      if (this._updater) {
+        await this._updater(this.position);
+      }
+      this._scheduleUpdate();
+    });
+  }
+}
+
+// Use it:
+const player = new Player({
+  app: { token: "your-token" },
+  timer: new VideoElementTimer(document.querySelector("video")),
+});
+```
+
+## Choosing a timer
+
+<Tabs>
+  <Tab title="No audio (debugging)">
+    ```typescript
+    import { Player, BasicTimer } from "textalive-app-api";
+
+    const player = new Player({
+      app: { token: "your-app-token" },
+      timer: new BasicTimer(),
+    });
+    ```
+
+    Use `BasicTimer` when you want to iterate on visual animations quickly
+    without worrying about audio loading.
+  </Tab>
+  <Tab title="Songle audio (production)">
+    ```typescript
+    import { Player, SongleTimer } from "textalive-app-api";
+
+    const player = new Player({
+      app: { token: "your-app-token" },
+      // SongleTimer is the default; this is equivalent to omitting the option
+      timer: new SongleTimer(),
+      mediaElement: document.querySelector("#media"),
+    });
+    ```
+
+    Use `SongleTimer` for real audio playback in production.
+  </Tab>
+  <Tab title="Songle Sync (multi-device)">
+    ```typescript
+    import { Player, SongleTimer } from "textalive-app-api";
+
+    const player = new Player({
+      app: { token: "your-app-token" },
+      timer: new SongleTimer({
+        accessToken: "your-songle-sync-access-token",
+        secretToken: "your-songle-sync-secret-token",
+      }),
+      mediaElement: document.querySelector("#media"),
+    });
+    ```
+
+    Use Songle Sync when multiple devices should play in lockstep.
+  </Tab>
+</Tabs>
+
+---
+
+Full type reference: [/api/timer](/api/timer)

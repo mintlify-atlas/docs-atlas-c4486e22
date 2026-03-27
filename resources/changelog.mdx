@@ -1,0 +1,60 @@
+---
+title: "Changelog"
+description: "Release history and deprecation notices for the TextAlive App API npm package."
+keywords: ["changelog", "release notes", "deprecations", "version history"]
+---
+
+<Note>
+  For the latest releases, visit the [GitHub releases page](https://github.com/TextAliveJp/textalive-app-api/releases). Development history and design notes are recorded on the [TextAlive App API Scrapbox page](https://scrapbox.io/textalive/TextAlive_App_API).
+</Note>
+
+## Version 0.4.0
+
+**Current release** — published as `textalive-app-api@0.4.0` on npm.
+
+This version ships the following production dependencies:
+
+| Package | Version |
+| --- | --- |
+| `axios` | `^1.6.8` |
+| `webfontloader` | `^1.6.28` |
+| `songle-api` *(optional)* | `^1.2.2` |
+
+`songle-api` is an optional dependency. It provides beat and music structure analysis powered by the Songle engine. The package will work without it, but music map data will be fetched from the TextAlive API server rather than computed locally.
+
+### Deprecations in 0.4.0
+
+The following APIs are deprecated. They remain functional for backwards compatibility but may be removed in a future version. Update your code to use the replacements shown below.
+
+<Warning>
+  **`IDataLoader.lyricsId` is deprecated.**
+  Use the `id` property on the `LyricsInfo` object (`IDataLoader.lyrics.id`) instead. The `lyricsId` shortcut will not be maintained going forward.
+</Warning>
+
+<Warning>
+  **`IDataLoader.text` is deprecated.**
+  Use the `text` property on the `LyricsBody` object (`IDataLoader.lyricsBody.text`) instead. The top-level `text` shortcut will not be maintained going forward.
+</Warning>
+
+<Warning>
+  **`Player.setMediaElement()` is deprecated.**
+  Set the media element by assigning to the `IPlayer.mediaElement` property directly. The `setMediaElement` method is a legacy setter that predates the property-based API.
+</Warning>
+
+<Warning>
+  **`Player.setMediaPosition()` is deprecated.**
+  Use `IPlayer.requestMediaSeek(position)` to seek to a position in the media. The `setMediaPosition` method is superseded by the request-based seek API.
+</Warning>
+
+<Warning>
+  **`ISongExplorer.findChorusBetween()` is deprecated** (also exposed as `IPlayer.findChorusBetween`).
+  Use `findChorus(time, options?)` instead. The new method accepts a single timestamp and optional search options rather than a start/end range.
+</Warning>
+
+## Package metadata
+
+- **npm package**: [`textalive-app-api`](https://www.npmjs.com/package/textalive-app-api)
+- **Repository**: [github.com/TextAliveJp/textalive-app-api](https://github.com/TextAliveJp/textalive-app-api)
+- **License**: See `LICENSE.md` in the repository
+- **Author**: AIST TextAlive Project
+- **Module formats**: CommonJS (`dist/index.js`), ES module (`dist/index.es.js`), TypeScript types (`dist/textalive-app-api.d.ts`)

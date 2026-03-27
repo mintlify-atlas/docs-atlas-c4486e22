@@ -1,0 +1,306 @@
+---
+title: "Animation"
+description: "Apply easing functions, 2D transforms, and color utilities to animate lyric elements in sync with music."
+---
+
+The TextAlive App API ships several utility classes for building visual effects: `Ease` for easing curves, `Matrix2D` for 2D affine transforms, `Color` for ARGB color manipulation, and `Point` for 2D coordinates.
+
+## The Ease class
+
+`Ease` is a static class — a collection of easing functions inherited from CreateJS. Each function accepts a normalized time value `t` in `[0, 1]` and returns a curved output in `[0, 1]`.
+
+See the [CreateJS live demo](https://www.createjs.com/demos/tweenjs/tween_sparktable) to preview each curve.
+
+### Static easing functions
+
+<Tabs>
+  <Tab title="Polynomial">
+    | Property | Description |
+    |---|---|
+    | `Ease.linear` | No curve — output equals input |
+    | `Ease.quadIn` / `quadOut` / `quadInOut` | Power of 2 |
+    | `Ease.cubicIn` / `cubicOut` / `cubicInOut` | Power of 3 |
+    | `Ease.quartIn` / `quartOut` / `quartInOut` | Power of 4 |
+    | `Ease.quintIn` / `quintOut` / `quintInOut` | Power of 5 |
+  </Tab>
+  <Tab title="Sine / Circ">
+    | Property | Description |
+    |---|---|
+    | `Ease.sineIn` / `sineOut` / `sineInOut` | Sine wave curve |
+    | `Ease.circIn` / `circOut` / `circInOut` | Circular curve |
+  </Tab>
+  <Tab title="Bounce / Elastic / Back">
+    | Property | Description |
+    |---|---|
+    | `Ease.bounceIn` / `bounceOut` / `bounceInOut` | Bouncing effect |
+    | `Ease.elasticIn` / `elasticOut` / `elasticInOut` | Elastic spring effect |
+    | `Ease.backIn` / `backOut` / `backInOut` | Overshoots the target |
+  </Tab>
+</Tabs>
+
+### Factory functions
+
+For fine-grained control, use the factory functions to generate a custom easing function:
+
+```typescript
+import { Ease } from "textalive-app-api";
+
+// Mimics Adobe Flash/Animate -100 to 100 easing.
+// amount: -1 (ease in) to 1 (ease out)
+const easeOut = Ease.get(0.8);
+
+// Configurable power — getPowIn, getPowOut, getPowInOut
+const quartic = Ease.getPowIn(4);
+
+// Configurable back ease — getBackIn, getBackOut, getBackInOut
+const springyBack = Ease.getBackOut(2.5);
+
+// Configurable elastic — getElasticIn, getElasticOut, getElasticInOut
+// amplitude: wave height, period: oscillation period
+const elastic = Ease.getElasticOut(1, 0.3);
+```
+
+### Applying easing to progress()
+
+Combine an easing function with the `progress(time)` method on any text unit to produce smooth animations:
+
+```typescript
+onTimeUpdate(position: number) {
+  const char = player.video?.findChar(position);
+  if (!char) return;
+
+  // Raw linear progress [0, 1]
+  const raw = char.progress(position);
+
+  // Apply easing
+  const t = Ease.cubicOut(raw);
+
+  // Use t to drive your animation
+  element.style.transform = `scale(${0.5 + t * 0.5})`;
+  element.style.opacity = String(t);
+}
+```
+
+<Tip>
+  Drive animations from `requestAnimationFrame` rather than only from `onTimeUpdate` when you need the smoothest possible visuals. Store the last known `position` from `onTimeUpdate` and sample it each frame.
+</Tip>
+
+## Complete animation example: beat-driven scale
+
+The following example scales a character element based on the progress through the current beat:
+
+```typescript
+import { Player, IPlayerApp, Ease } from "textalive-app-api";
+
+const el = document.querySelector<HTMLDivElement>("#char")!;
+let currentPosition = 0;
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  mediaElement: document.querySelector("#media")!,
+});
+
+player.addListener({
+  onAppReady(app: IPlayerApp) {
+    if (!app.managed) {
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+    }
+  },
+
+  onTimeUpdate(position: number) {
+    currentPosition = position;
+
+    const char = player.video?.findChar(position);
+    const beat = player.findBeat(position);
+
+    if (!char || !beat) {
+      el.style.transform = "scale(1)";
+      return;
+    }
+
+    // Char fades in linearly
+    const charT = Ease.cubicOut(char.progress(position));
+
+    // Beat pulses with a bounce
+    const beatT = Ease.bounceOut(beat.progress(position));
+    const scale = 1 + beatT * 0.3;
+
+    el.textContent = char.text;
+    el.style.opacity = String(charT);
+    el.style.transform = `scale(${scale})`;
+  },
+});
+```
+
+---
+
+## Matrix2D
+
+`Matrix2D` represents a 3×3 affine transformation matrix:
+
+```
+[ a  c  tx
+  b  d  ty
+  0  0  1  ]
+```
+
+Use it to compose translation, rotation, scale, and skew transforms for lyric elements — especially when rendering to a `<canvas>`.
+
+### Constructor and setValues
+
+```typescript
+import { Matrix2D } from "textalive-app-api";
+
+// Identity matrix (no transformation)
+const m = new Matrix2D();
+
+// Initialize with specific values
+m.setValues(a, b, c, d, tx, ty);
+```
+
+### Transform methods
+
+All transform methods return `this` so calls can be chained:
+
+```typescript
+const m = new Matrix2D()
+  .translate(100, 50)   // move 100px right, 50px down
+  .rotate(45)           // rotate 45 degrees clockwise
+  .scale(2, 2);         // scale up 2×
+```
+
+| Method | Signature | Description |
+|---|---|---|
+| `rotate` | `rotate(angle: number)` | Clockwise rotation in degrees. Multiply by `180/Math.PI` to convert from radians. |
+| `scale` | `scale(x: number, y: number)` | Scale horizontally and vertically. |
+| `translate` | `translate(x: number, y: number)` | Translate along x and y axes. |
+| `skew` | `skew(skewX: number, skewY: number)` | Skew in degrees. |
+| `appendTransform` | `appendTransform(x, y, scaleX, scaleY, rotation, skewX, skewY, regX?, regY?)` | Compose a full transform in one call. |
+| `prependTransform` | `prependTransform(x, y, scaleX, scaleY, rotation, skewX, skewY, regX?, regY?)` | Prepend a full transform. |
+
+### Append and prepend
+
+- `append(a, b, c, d, tx, ty)` — multiplies `(this) * (specified matrix)`
+- `prepend(a, b, c, d, tx, ty)` — multiplies `(specified matrix) * (this)`
+- `appendMatrix(matrix)` / `prependMatrix(matrix)` — same with a `Matrix2D` argument
+
+### Decompose
+
+Extract individual transform properties from a composed matrix:
+
+```typescript
+const props = m.decompose();
+// props: { x, y, scaleX, scaleY, skewX, skewY, rotation }
+console.log(props.rotation); // degrees
+```
+
+### Utility methods
+
+| Method | Description |
+|---|---|
+| `identity()` | Reset to the identity matrix (no transform). |
+| `invert()` | Invert the matrix — applies the opposite transformation. |
+| `equals(matrix)` | Returns `true` if all values match. |
+| `clone()` | Returns a new `Matrix2D` with the same values. |
+| `copy(matrix)` | Copies all values from another matrix into this one. |
+| `transformPoint(x, y, pt?)` | Apply this matrix to a point. |
+
+---
+
+## Color
+
+The `Color` class stores ARGB color data and provides helpers for converting between formats.
+
+### Constructor
+
+```typescript
+import { Color } from "textalive-app-api";
+
+// From a CSS hex string
+const red = new Color("#ff0000");
+
+// From a 32-bit ARGB integer
+const blue = new Color(0xff0000ff);
+
+// From another IColor
+const copy = new Color(existingColor);
+```
+
+### Channel properties
+
+| Property | Type | Description |
+|---|---|---|
+| `a` | `number` | Alpha channel, 0–255 |
+| `r` | `number` | Red channel, 0–255 |
+| `g` | `number` | Green channel, 0–255 |
+| `b` | `number` | Blue channel, 0–255 |
+| `value` | `number` | 32-bit ARGB integer (read/write) |
+
+### String representations
+
+| Property | Example output |
+|---|---|
+| `rgb` | `"112233"` (hex, no `#`) |
+| `cssRgb` | `"rgba(17,34,51)"` |
+| `rgba` | `"#11223300"` (hex RGBA) |
+| `argb` | `"0x00112233"` (hex ARGB) |
+| `cssRgba` | `"rgba(17,34,51,0)"` |
+
+### Methods
+
+```typescript
+color.eq(other);                 // true if all channels match
+color.toString();                // hex RGB string
+color.toString(true);           // hex RGBA string
+color.from("#ff0000");          // set from string, number, or IColor
+color.fromString("#aabbcc");    // set from hex string
+color.fromNumber(0xffaabbcc, true); // set from 32-bit ARGB number
+```
+
+### Applying color to a character
+
+```typescript
+onTimeUpdate(position: number) {
+  const char = player.video?.findChar(position);
+  if (!char) return;
+
+  const t = char.progress(position);
+  const c = new Color();
+  // Fade from white to red over the character's duration
+  c.r = 255;
+  c.g = Math.round(255 * (1 - t));
+  c.b = Math.round(255 * (1 - t));
+  c.a = 255;
+
+  char.color = c;
+}
+```
+
+---
+
+## Point
+
+`Point` represents a 2D coordinate. It is used as the return type of `Matrix2D.transformPoint()` and is useful for tracking positions of lyric elements.
+
+```typescript
+import { Point } from "textalive-app-api";
+
+const p = new Point(100, 200);
+console.log(p.x, p.y); // 100 200
+
+// Copy from another point
+const q = p.clone();
+
+// Update in place
+p.setValues(50, 75);
+
+// Copy values from another point into this one
+p.copy(q);
+```
+
+| Method | Description |
+|---|---|
+| `clone()` | Returns a new `Point` with the same x and y. |
+| `copy(point)` | Copies x and y from another `Point` into this one. |
+| `setValues(x?, y?)` | Sets x and y and returns `this`. |
+| `toString()` | Returns a string representation. |

@@ -1,0 +1,227 @@
+---
+title: "PlayerOptions"
+description: "Configuration options for initializing a Player instance, including app credentials, media element setup, font loading, and audio analysis features."
+---
+
+Pass a `PlayerOptions` object to the [`Player` constructor](/api/player#constructor) to configure how the player initializes.
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-developer-token" },
+  mediaElement: document.getElementById("media"),
+  vocalAmplitudeEnabled: true,
+});
+```
+
+## PlayerOptions
+
+<ParamField path="app" type="PlayerAppOptions">
+  Lyric app configuration. When set, the player reads the song URL from query parameters on initialization and attempts to connect to a TextAlive host.
+
+  <Expandable title="PlayerAppOptions properties">
+    <ParamField path="app.token" type="string" required>
+      Your developer token from [developer.textalive.jp](https://developer.textalive.jp). Required to authenticate API requests.
+    </ParamField>
+
+    <ParamField path="app.parameters" type="ParameterWidget[]">
+      List of adjustable parameters exposed to the TextAlive host. Each widget describes a named variable that the host can update at runtime, triggering [`onAppParameterUpdate`](/api/player-events#onappparameterupdate).
+
+      <Expandable title="ParameterWidget properties">
+        <ParamField path="name" type="string" required>
+          Internal variable name for this parameter.
+        </ParamField>
+        <ParamField path="title" type="string | RegionalText">
+          Human-readable label shown in the host UI. Can be a plain string or a `{ en: string, ja: string }` object for multi-language support.
+        </ParamField>
+        <ParamField path="className" type="string">
+          Widget type, e.g. `"Slider"`, `"ColorPicker"`, `"Checkbox"`.
+        </ParamField>
+        <ParamField path="params" type="array">
+          Options for the widget (e.g. `[0, 100]` for a slider from 0 to 100).
+        </ParamField>
+        <ParamField path="initialValue" type="ParameterValue">
+          Default value for this parameter. `ParameterValue` is `IColor | string | number | boolean`.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="timer" type="Timer">
+  A custom `Timer` instance to manage playback state. When not specified, `SongleTimer` is used by default, which embeds an audio player using the Songle API.
+
+  Provide `BasicTimer` here for debugging without audio playback:
+
+  ```typescript
+  import { Player, BasicTimer } from "textalive-app-api";
+
+  const player = new Player({
+    app: { token: "your-token" },
+    timer: new BasicTimer(),
+  });
+  ```
+</ParamField>
+
+<ParamField path="mediaElement" type="HTMLElement | string">
+  The host element for the embedded audio player and banner. Accepts a DOM element or a CSS selector string. When not set, the player creates its own container element.
+</ParamField>
+
+<ParamField path="mediaBannerPosition" type="PlayerBannerPosition">
+  Controls where the attribution banner appears relative to `mediaElement`. Defaults to `"embed"` (directly below the audio element).
+
+  <Expandable title="Accepted values">
+    | Value | Description |
+    |-------|-------------|
+    | `"top"` | Top center |
+    | `"top left"` | Top left corner |
+    | `"top right"` | Top right corner |
+    | `"bottom"` | Bottom center |
+    | `"bottom left"` | Bottom left corner |
+    | `"bottom right"` | Bottom right corner |
+    | `"left"` | Left center |
+    | `"left top"` | Left side, top-aligned |
+    | `"left bottom"` | Left side, bottom-aligned |
+    | `"right"` | Right center |
+    | `"right top"` | Right side, top-aligned |
+    | `"right bottom"` | Right side, bottom-aligned |
+    | `"embed"` | Inline below audio (default) |
+    | `null` | Banner hidden |
+  </Expandable>
+</ParamField>
+
+<ParamField path="throttleInterval" type="number">
+  Interval in milliseconds for throttled time-update events. Controls how often [`onThrottledTimeUpdate`](/api/player-events#onthrottledtimeupdate) fires when the song is playing.
+</ParamField>
+
+<ParamField path="lyricsFetchTimeout" type="number">
+  Timeout in milliseconds for fetching lyrics text. Set to `0` (or omit) to disable the timeout and wait indefinitely.
+</ParamField>
+
+<ParamField path="fontFamilies" type="(FontInfo | string)[]">
+  List of font families to preload. Each entry can be a font family name string or a `FontInfo` object.
+
+  When set to `null`, all available TextAlive fonts are loaded. When omitted, no fonts are preloaded.
+
+  <Expandable title="FontInfo properties">
+    <ParamField path="key" type="string" required>
+      Unique string identifier for the font.
+    </ParamField>
+    <ParamField path="en" type="string" required>
+      English font family name (used in CSS).
+    </ParamField>
+    <ParamField path="ja" type="string">
+      Japanese font family name.
+    </ParamField>
+    <ParamField path="url" type="string">
+      URL of the CSS file that loads the font.
+    </ParamField>
+    <ParamField path="compactUrl" type="string">
+      URL of a subset CSS file containing only frequently-used characters.
+    </ParamField>
+    <ParamField path="google" type="boolean">
+      `true` if this is a Google Fonts font.
+    </ParamField>
+    <ParamField path="typesquare" type="boolean">
+      `true` if this is a Morisawa TypeSquare font.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="vocalAmplitudeEnabled" type="boolean">
+  Set to `true` to load vocal amplitude data when a song is loaded. Required before calling [`getVocalAmplitude()`](/api/player#getvocalamplitude) or [`getMaxVocalAmplitude()`](/api/player#getmaxvocalamplitude).
+</ParamField>
+
+<ParamField path="valenceArousalEnabled" type="boolean">
+  Set to `true` to load valence/arousal data when a song is loaded. Required before calling [`getValenceArousal()`](/api/player#getvalencearousal) or [`getMedianValenceArousal()`](/api/player#getmedianvalencearousal).
+</ParamField>
+
+---
+
+## PlayerVideoOptions
+
+Passed as the second argument to `createFromSongUrl`, `createFromSongPath`, `createFromText`, and `createFromJSON`. Use it to override the default TextAlive video data for a song.
+
+<ParamField path="video" type="PartialVideoEntry">
+  Overrides for the video entry loaded from TextAlive. Use specific revision IDs to pin a song map or lyrics version.
+
+  <Expandable title="PartialVideoEntry properties">
+    <ParamField path="lyricId" type="number">
+      Lyrics ID to load. Use `-1` for the latest, `0` to skip lyrics loading, or a specific numeric ID.
+    </ParamField>
+    <ParamField path="lyricDiffId" type="number">
+      Lyrics diff (correction) ID.
+    </ParamField>
+    <ParamField path="chordId" type="number">
+      Revision ID for chord progression data.
+    </ParamField>
+    <ParamField path="beatId" type="number">
+      Revision ID for beat data.
+    </ParamField>
+    <ParamField path="repetitiveSegmentId" type="number">
+      Revision ID for repetitive segment (chorus) data.
+    </ParamField>
+    <ParamField path="json" type="VideoData">
+      A complete `VideoData` object to use as the video data, bypassing any server-side video data.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="altLyricsUrl" type="string">
+  URL of an alternative source for lyrics text. Overrides the default lyrics URL associated with the song in TextAlive.
+</ParamField>
+
+---
+
+## Complete example
+
+```typescript
+import { Player, BasicTimer } from "textalive-app-api";
+
+const player = new Player({
+  // Lyric app registration
+  app: {
+    token: "your-developer-token",
+    parameters: [
+      {
+        name: "colorScheme",
+        title: { en: "Color scheme", ja: "カラーテーマ" },
+        className: "Slider",
+        params: [0, 5],
+        initialValue: 0,
+      },
+    ],
+  },
+
+  // Embed audio in a specific container
+  mediaElement: document.getElementById("media-container"),
+
+  // Place attribution banner at the bottom right
+  mediaBannerPosition: "bottom right",
+
+  // Throttle time-update events to at most once per 100 ms
+  throttleInterval: 100,
+
+  // Time out if lyrics don't load within 10 seconds
+  lyricsFetchTimeout: 10000,
+
+  // Pre-load two font families
+  fontFamilies: ["Noto Sans JP", "M PLUS Rounded 1c"],
+
+  // Enable audio feature data
+  vocalAmplitudeEnabled: true,
+  valenceArousalEnabled: true,
+});
+
+// Load a specific song with pinned revision IDs
+player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028", {
+  video: {
+    beatId: 3953,
+    chordId: 2727,
+    repetitiveSegmentId: 2946,
+    lyricId: 59415,
+    lyricDiffId: 13962,
+  },
+});
+```

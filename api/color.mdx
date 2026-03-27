@@ -1,0 +1,177 @@
+---
+title: "Color"
+description: "Represents RGBA color information and provides utilities for converting between color formats."
+---
+
+The `Color` class stores RGBA color data and lets you read or write color values in a variety of formats — 32-bit integers, hex strings, and CSS-compatible strings. You can construct a `Color` from a hex string, a 32-bit integer, or another `IColor`-compatible object.
+
+`Color` implements the `IColor` interface.
+
+## Constructor
+
+```typescript
+new Color(color?: string | number | IColor)
+```
+
+<ParamField path="color" type="string | number | IColor">
+  Optional initial value. Accepted formats:
+  - `string` — hex color string such as `"#ff0000"` (RGB) or `"#ff000080"` (RGBA)
+  - `number` — 32-bit ARGB integer or 24-bit RGB integer
+  - `IColor` — copies channel values from another color object
+</ParamField>
+
+## Practical example
+
+```typescript
+import { Color } from "textalive-app-api";
+
+// In onTimeUpdate:
+const char = player.video?.findChar(position);
+if (char) {
+  const progress = char.progress(position);
+  const c = new Color("#ff4400");
+  c.a = Math.round(progress * 255);
+  char.color = c;
+}
+```
+
+## IColor interface
+
+The `IColor` interface defines the contract that `Color` implements. All channel values range from `0` to `255`.
+
+### Channel properties
+
+<ResponseField name="a" type="number">
+  Alpha channel. `0` is fully transparent, `255` is fully opaque.
+</ResponseField>
+
+<ResponseField name="r" type="number">
+  Red channel `[0–255]`.
+</ResponseField>
+
+<ResponseField name="g" type="number">
+  Green channel `[0–255]`.
+</ResponseField>
+
+<ResponseField name="b" type="number">
+  Blue channel `[0–255]`.
+</ResponseField>
+
+### Integer representation
+
+<ResponseField name="value" type="number">
+  Get or set the color as a 32-bit ARGB integer.
+</ResponseField>
+
+### String representations
+
+<ResponseField name="rgb" type="string">
+  Hex string representing the RGB channels, e.g. `"112233"`.
+</ResponseField>
+
+<ResponseField name="cssRgb" type="string">
+  CSS `rgb()` string, e.g. `"rgb(17,34,51)"`.
+</ResponseField>
+
+<ResponseField name="rgba" type="string">
+  Hex string representing RGBA channels with a leading `#`, e.g. `"#11223300"`.
+</ResponseField>
+
+<ResponseField name="argb" type="string">
+  Hex string representing ARGB channels with a `0x` prefix, e.g. `"0x00112233"`.
+</ResponseField>
+
+<ResponseField name="cssRgba" type="string">
+  CSS `rgba()` string, e.g. `"rgba(17,34,51,0)"`.
+</ResponseField>
+
+## Color-specific getters
+
+These properties are available on `Color` instances (not on the base `IColor` interface).
+
+<ResponseField name="valueArgb" type="number">
+  The color as a 32-bit ARGB integer.
+</ResponseField>
+
+<ResponseField name="valueRgb" type="number">
+  The color as a 24-bit RGB integer (alpha is ignored).
+</ResponseField>
+
+<ResponseField name="hexRgb" type="string">
+  Hex string with a leading `#`, e.g. `"#rrggbb"`.
+</ResponseField>
+
+<ResponseField name="hexA" type="string">
+  Hex string of the alpha channel component only.
+</ResponseField>
+
+## Methods
+
+<ResponseField name="eq" type="(color: Color) => boolean">
+  Returns `true` if all four channel values of `color` match this instance.
+
+  <Expandable title="Parameters">
+    <ParamField path="color" type="Color">
+      The color to compare against.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="toString" type="(withAlpha?: boolean) => string">
+  Returns a string representation of the color.
+
+  <Expandable title="Parameters">
+    <ParamField path="withAlpha" type="boolean">
+      When `true`, the alpha channel is included in the output.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="from" type="(color: string | number | IColor) => void">
+  Sets the color from any supported source format — hex string, integer, or another `IColor`.
+
+  <Expandable title="Parameters">
+    <ParamField path="color" type="string | number | IColor">
+      The color source.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="fromString" type="(color: string) => void">
+  Sets the color from a hex string. Accepts shorthand (`#rgb`) and full forms (`#rrggbb`, `#rrggbbaa`).
+
+  <Expandable title="Parameters">
+    <ParamField path="color" type="string">
+      Hex color string.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="fromNumber" type="(val: number, withAlpha?: boolean) => void">
+  Sets the color from a numeric value.
+
+  <Expandable title="Parameters">
+    <ParamField path="val" type="number">
+      32-bit ARGB or 24-bit RGB integer.
+    </ParamField>
+    <ParamField path="withAlpha" type="boolean">
+      When `true`, the value is interpreted as 32-bit ARGB. Otherwise, as 24-bit RGB.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+## ColorData
+
+`ColorData` is the serialization format used internally to represent a color in JSON video data.
+
+```typescript
+interface ColorData {
+  type: "Color";
+  value: {
+    a: number; // [0–255]
+    r: number; // [0–255]
+    g: number; // [0–255]
+    b: number; // [0–255]
+  };
+}
+```

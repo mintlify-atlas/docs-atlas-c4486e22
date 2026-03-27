@@ -1,0 +1,206 @@
+---
+title: 'Phrase (IPhrase)'
+description: 'A timed lyrics phrase — the top-level grouping of words and characters in a TextAlive video.'
+keywords: ['IPhrase', 'phrase', 'lyrics', 'text unit', 'rendering unit']
+---
+
+`IPhrase` represents a single phrase of sung lyrics. It extends `ITextUnit`, which in turn extends `IRenderingUnit`, so it inherits timing, navigation, and animation properties from both.
+
+**Inheritance chain:** `IPhrase` → `ITextUnit` → `IRenderingUnit` → `TimedObject`
+
+```typescript
+export declare interface IPhrase extends ITextUnit {
+  readonly children: IWord[];
+  readonly previous: IPhrase;
+  readonly next: IPhrase;
+  readonly wordCount: number;
+  readonly charCount: number;
+  readonly firstWord: IWord;
+  readonly lastWord: IWord;
+  readonly firstChar: IChar;
+  readonly lastChar: IChar;
+  findIndex(unit: IWord | IChar): number;
+}
+```
+
+## IPhrase properties
+
+<ResponseField name="children" type="IWord[]">
+  The words that make up this phrase, in order.
+</ResponseField>
+
+<ResponseField name="previous" type="IPhrase">
+  The phrase immediately before this one, or `null` if this is the first phrase.
+</ResponseField>
+
+<ResponseField name="next" type="IPhrase">
+  The phrase immediately after this one, or `null` if this is the last phrase.
+</ResponseField>
+
+<ResponseField name="wordCount" type="number">
+  Number of words in this phrase.
+</ResponseField>
+
+<ResponseField name="charCount" type="number">
+  Total number of characters across all words in this phrase.
+</ResponseField>
+
+<ResponseField name="firstWord" type="IWord">
+  The first word in this phrase.
+</ResponseField>
+
+<ResponseField name="lastWord" type="IWord">
+  The last word in this phrase.
+</ResponseField>
+
+<ResponseField name="firstChar" type="IChar">
+  The first character in this phrase.
+</ResponseField>
+
+<ResponseField name="lastChar" type="IChar">
+  The last character in this phrase.
+</ResponseField>
+
+## IPhrase methods
+
+### findIndex
+
+Returns the index of a word or character within this phrase's flat unit list.
+
+<ParamField path="unit" type="IWord | IChar" required>
+  The word or character whose index you want.
+</ParamField>
+
+**Returns** `number`
+
+---
+
+## Inherited from ITextUnit
+
+```typescript
+export declare interface ITextUnit extends IRenderingUnit {
+  readonly text: string;
+}
+```
+
+<ResponseField name="text" type="string">
+  The plain text of this phrase — the concatenated text of all its words.
+</ResponseField>
+
+---
+
+## Inherited from IRenderingUnit
+
+<ResponseField name="startTime" type="number">
+  Start time of this phrase in milliseconds.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  End time of this phrase in milliseconds.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  Duration of this phrase in milliseconds (`endTime - startTime`).
+</ResponseField>
+
+<ResponseField name="animate" type="RenderingUnitFunction">
+  Assign a function here to override the default template animation for this phrase. The function receives `(now: number, u: IRenderingUnit)` on every render frame.
+</ResponseField>
+
+### progress
+
+Maps a song position to a value in `[0, 1]` representing how far through this phrase playback has reached.
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+**Returns** `number` — `0` at `startTime`, `1` at `endTime`.
+
+### getType
+
+Returns the unit type constant.
+
+**Returns** `number` — always `1` (`UnitTypes.PHRASE`) for phrases.
+
+---
+
+## PhraseData
+
+`PhraseData` is the serialization format used when constructing a video from JSON.
+
+```typescript
+export declare interface PhraseData extends UnitData {
+  words: WordData[];
+}
+
+export declare interface UnitData {
+  startTime?: number;
+  endTime?: number;
+}
+```
+
+<Expandable title="PhraseData properties">
+  <ResponseField name="words" type="WordData[]">
+    The word data objects that make up this phrase.
+  </ResponseField>
+  <ResponseField name="startTime" type="number">
+    Optional override for the phrase start time [ms].
+  </ResponseField>
+  <ResponseField name="endTime" type="number">
+    Optional override for the phrase end time [ms].
+  </ResponseField>
+</Expandable>
+
+---
+
+## Examples
+
+### Iterate over all phrases and their words
+
+```typescript
+player.addListener({
+  onVideoReady(v: IVideo) {
+    for (const phrase of v.phrases) {
+      console.log(`Phrase [${phrase.startTime}ms]: "${phrase.text}"`);
+
+      for (const word of phrase.children) {
+        console.log(`  Word: "${word.text}" (pos: ${word.pos})`);
+      }
+    }
+  }
+});
+```
+
+### Use findPhrase in onTimeUpdate to display the current phrase
+
+```typescript
+let activePhraseEl: HTMLElement | null = null;
+
+player.addListener({
+  onTimeUpdate(position: number) {
+    const phrase = player.video.findPhrase(position);
+
+    if (phrase) {
+      // Show phrase text and how far through it we are
+      const progress = phrase.progress(position); // [0, 1]
+      display(phrase.text, progress);
+    } else {
+      clearDisplay();
+    }
+  }
+});
+
+function display(text: string, progress: number) {
+  document.getElementById('lyrics')!.textContent = text;
+  document.getElementById('bar')!.style.width = `${progress * 100}%`;
+}
+
+function clearDisplay() {
+  document.getElementById('lyrics')!.textContent = '';
+}
+```
+
+<Tip>
+  Use `findPhraseChange` instead of `findPhrase` when you need to trigger enter and exit animations exactly once per phrase transition rather than re-evaluating on every frame.
+</Tip>

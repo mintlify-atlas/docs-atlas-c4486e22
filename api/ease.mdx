@@ -1,0 +1,280 @@
+---
+title: "Ease"
+description: "A collection of easing functions for smooth animation, inherited from the CreateJS open source library."
+---
+
+The `Ease` class provides a collection of static easing functions you can use to create smooth, non-linear animations synchronized with music playback. All functions accept an input in the range `[0, 1]` and return an output in the same range.
+
+This implementation is inherited from the [CreateJS](http://createjs.com/) open source library. See the [live demo](https://www.createjs.com/demos/tweenjs/tween_sparktable) to visualize all available easing curves.
+
+<Tip>
+Combine any easing function with a rendering unit's `progress(position)` method to drive smooth animations. `progress` maps the current playback position to a `[0, 1]` value within the unit's time range, and you pass that value into an easing function to get a non-linear result.
+</Tip>
+
+## Practical example
+
+```typescript
+import { Ease } from "textalive-app-api";
+
+// In onTimeUpdate:
+const beat = player.findBeat(position);
+if (beat) {
+  const t = Ease.cubicOut(beat.progress(position));
+  element.style.transform = `scale(${1 + t * 0.3})`;
+}
+
+// Custom power ease:
+const strongEase = Ease.getPowInOut(4);
+const t = strongEase(char.progress(position));
+```
+
+## Linear
+
+<ResponseField name="Ease.linear" type="(t: number) => number">
+  A linear (no-op) easing function. Output equals input.
+</ResponseField>
+
+## Flash-style ease
+
+<ResponseField name="Ease.get" type="(amount: number) => (input: number) => number">
+  Returns an easing function that mimics the simple -100 to 100 easing in Adobe Flash/Animate.
+
+  <Expandable title="Parameters">
+    <ParamField path="amount" type="number">
+      A value from `-1` (ease in) to `1` (ease out) indicating the strength and direction of the ease.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+## Power eases
+
+These factory functions return an easing function based on an exponential power.
+
+<ResponseField name="Ease.getPowIn" type="(pow: number) => (input: number) => number">
+  Returns a configurable exponential ease-in function.
+
+  <Expandable title="Parameters">
+    <ParamField path="pow" type="number">
+      The exponent to use. For example, `3` returns a cubic ease.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.getPowOut" type="(pow: number) => (input: number) => number">
+  Returns a configurable exponential ease-out function.
+
+  <Expandable title="Parameters">
+    <ParamField path="pow" type="number">
+      The exponent to use.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.getPowInOut" type="(pow: number) => (input: number) => number">
+  Returns a configurable exponential ease-in-out function.
+
+  <Expandable title="Parameters">
+    <ParamField path="pow" type="number">
+      The exponent to use.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+## Quad eases (pow=2)
+
+<ResponseField name="Ease.quadIn" type="(input: number) => number">
+  Quadratic ease in.
+</ResponseField>
+
+<ResponseField name="Ease.quadOut" type="(input: number) => number">
+  Quadratic ease out.
+</ResponseField>
+
+<ResponseField name="Ease.quadInOut" type="(input: number) => number">
+  Quadratic ease in-out.
+</ResponseField>
+
+## Cubic eases (pow=3)
+
+<ResponseField name="Ease.cubicIn" type="(input: number) => number">
+  Cubic ease in.
+</ResponseField>
+
+<ResponseField name="Ease.cubicOut" type="(input: number) => number">
+  Cubic ease out.
+</ResponseField>
+
+<ResponseField name="Ease.cubicInOut" type="(input: number) => number">
+  Cubic ease in-out.
+</ResponseField>
+
+## Quart eases (pow=4)
+
+<ResponseField name="Ease.quartIn" type="(input: number) => number">
+  Quartic ease in.
+</ResponseField>
+
+<ResponseField name="Ease.quartOut" type="(input: number) => number">
+  Quartic ease out.
+</ResponseField>
+
+<ResponseField name="Ease.quartInOut" type="(input: number) => number">
+  Quartic ease in-out.
+</ResponseField>
+
+## Quint eases (pow=5)
+
+<ResponseField name="Ease.quintIn" type="(input: number) => number">
+  Quintic ease in.
+</ResponseField>
+
+<ResponseField name="Ease.quintOut" type="(input: number) => number">
+  Quintic ease out.
+</ResponseField>
+
+<ResponseField name="Ease.quintInOut" type="(input: number) => number">
+  Quintic ease in-out.
+</ResponseField>
+
+## Sine eases
+
+<ResponseField name="Ease.sineIn" type="(input: number) => number">
+  Sinusoidal ease in.
+</ResponseField>
+
+<ResponseField name="Ease.sineOut" type="(input: number) => number">
+  Sinusoidal ease out.
+</ResponseField>
+
+<ResponseField name="Ease.sineInOut" type="(input: number) => number">
+  Sinusoidal ease in-out.
+</ResponseField>
+
+## Back eases
+
+Back eases overshoot slightly before settling at the target value.
+
+<ResponseField name="Ease.getBackIn" type="(amount: number) => (input: number) => number">
+  Returns a configurable back ease-in function.
+
+  <Expandable title="Parameters">
+    <ParamField path="amount" type="number">
+      The strength of the overshoot. The default back ease uses approximately `1.7`.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.getBackOut" type="(amount: number) => (input: number) => number">
+  Returns a configurable back ease-out function.
+
+  <Expandable title="Parameters">
+    <ParamField path="amount" type="number">
+      The strength of the overshoot.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.getBackInOut" type="(amount: number) => (input: number) => number">
+  Returns a configurable back ease-in-out function.
+
+  <Expandable title="Parameters">
+    <ParamField path="amount" type="number">
+      The strength of the overshoot.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.backIn" type="(input: number) => number">
+  Back ease in with the default overshoot amount (~1.7).
+</ResponseField>
+
+<ResponseField name="Ease.backOut" type="(input: number) => number">
+  Back ease out with the default overshoot amount.
+</ResponseField>
+
+<ResponseField name="Ease.backInOut" type="(input: number) => number">
+  Back ease in-out with the default overshoot amount.
+</ResponseField>
+
+## Circular eases
+
+<ResponseField name="Ease.circIn" type="(input: number) => number">
+  Circular ease in.
+</ResponseField>
+
+<ResponseField name="Ease.circOut" type="(input: number) => number">
+  Circular ease out.
+</ResponseField>
+
+<ResponseField name="Ease.circInOut" type="(input: number) => number">
+  Circular ease in-out.
+</ResponseField>
+
+## Bounce eases
+
+<ResponseField name="Ease.bounceIn" type="(input: number) => number">
+  Bounce ease in.
+</ResponseField>
+
+<ResponseField name="Ease.bounceOut" type="(input: number) => number">
+  Bounce ease out.
+</ResponseField>
+
+<ResponseField name="Ease.bounceInOut" type="(input: number) => number">
+  Bounce ease in-out.
+</ResponseField>
+
+## Elastic eases
+
+Elastic eases produce a spring-like oscillation around the target value. You can configure their amplitude and period.
+
+<ResponseField name="Ease.getElasticIn" type="(amplitude: number, period: number) => (input: number) => number">
+  Returns a configurable elastic ease-in function.
+
+  <Expandable title="Parameters">
+    <ParamField path="amplitude" type="number">
+      The amplitude of the oscillation.
+    </ParamField>
+    <ParamField path="period" type="number">
+      The period of the oscillation.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.getElasticOut" type="(amplitude: number, period: number) => (input: number) => number">
+  Returns a configurable elastic ease-out function.
+
+  <Expandable title="Parameters">
+    <ParamField path="amplitude" type="number">
+      The amplitude of the oscillation.
+    </ParamField>
+    <ParamField path="period" type="number">
+      The period of the oscillation.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.getElasticInOut" type="(amplitude: number, period: number) => (input: number) => number">
+  Returns a configurable elastic ease-in-out function.
+
+  <Expandable title="Parameters">
+    <ParamField path="amplitude" type="number">
+      The amplitude of the oscillation.
+    </ParamField>
+    <ParamField path="period" type="number">
+      The period of the oscillation.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="Ease.elasticIn" type="(input: number) => number">
+  Elastic ease in with default amplitude and period.
+</ResponseField>
+
+<ResponseField name="Ease.elasticOut" type="(input: number) => number">
+  Elastic ease out with default amplitude and period.
+</ResponseField>
+
+<ResponseField name="Ease.elasticInOut" type="(input: number) => number">
+  Elastic ease in-out with default amplitude and period.
+</ResponseField>

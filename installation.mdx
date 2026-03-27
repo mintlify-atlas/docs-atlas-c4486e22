@@ -1,0 +1,110 @@
+---
+title: "Installation"
+description: "Install the TextAlive App API package via npm or load it from a CDN, then set up your app token."
+---
+
+## Package manager
+
+Install `textalive-app-api` from npm:
+
+<CodeGroup>
+
+```bash npm
+npm install textalive-app-api
+```
+
+```bash yarn
+yarn add textalive-app-api
+```
+
+```bash pnpm
+pnpm add textalive-app-api
+```
+
+</CodeGroup>
+
+### ES module import
+
+```typescript
+import { Player } from "textalive-app-api";
+```
+
+### CommonJS require
+
+```javascript
+const { Player } = require("textalive-app-api");
+```
+
+### TypeScript types
+
+TypeScript type definitions are bundled with the package at `dist/textalive-app-api.d.ts` and are automatically picked up by the TypeScript compiler — no separate `@types` package is needed.
+
+The `exports` field in `package.json` routes imports to the correct build:
+
+| Condition | File |
+|---|---|
+| `import` (ESM) | `dist/index.es.js` |
+| `require` (CJS) | `dist/index.js` |
+| `types` | `dist/textalive-app-api.d.ts` |
+
+## CDN
+
+Load the API directly in an HTML file without a build step. The API depends on `axios`, so you must include it **before** the API script:
+
+```html
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://unpkg.com/textalive-app-api/dist/index.js"></script>
+```
+
+After both scripts load, the global variable `TextAliveApp` is defined. Destructure it to access API classes:
+
+```javascript
+const { Player } = TextAliveApp;
+
+const player = new Player({
+  app: { token: "your_app_token_here" },
+});
+```
+
+## App token
+
+<Note>
+  An app token is required for the player to connect to the TextAlive API server and load song and lyrics data. Without a valid token, calls to `createFromSongUrl` will fail.
+</Note>
+
+Obtain a token by registering your application at [developer.textalive.jp](https://developer.textalive.jp).
+
+Pass the token via `PlayerOptions.app.token` when constructing a `Player`:
+
+```typescript
+import { Player, PlayerOptions } from "textalive-app-api";
+
+const options: PlayerOptions = {
+  app: {
+    token: "your_app_token_here",
+  },
+  // Optional: a DOM element to host the audio widget.
+  mediaElement: document.querySelector("#media"),
+};
+
+const player = new Player(options);
+```
+
+The `app` property on `PlayerOptions` accepts a `PlayerAppOptions` object:
+
+| Property | Type | Description |
+|---|---|---|
+| `token` | `string` | **Required.** Your application token from developer.textalive.jp. |
+| `parameters` | `ParameterWidget[]` | Optional list of adjustable parameters exposed to a TextAlive host. |
+
+<Warning>
+  Do not hard-code your app token in public repositories. Use an environment variable or a build-time injection mechanism to keep it out of version control.
+</Warning>
+
+## Optional dependencies
+
+The package declares `songle-api` as an optional peer dependency. If `songle-api` is installed alongside `textalive-app-api`, the player can use the `SongleTimer` for richer music-synchronised playback. Without it, the default timer is used.
+
+```bash
+npm install textalive-app-api songle-api
+```

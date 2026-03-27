@@ -1,0 +1,251 @@
+---
+title: 'Character (IChar)'
+description: 'A single timed character with font and color properties — the smallest lyrics rendering unit.'
+keywords: ['IChar', 'character', 'char', 'lyrics', 'font', 'color', 'text unit', 'rendering unit']
+---
+
+`IChar` is the most granular lyrics rendering unit — a single character with precise timing, font, and color control. It extends `ITextUnit` → `IRenderingUnit`.
+
+**Inheritance chain:** `IChar` → `ITextUnit` → `IRenderingUnit` → `TimedObject`
+
+```typescript
+export declare interface IChar extends ITextUnit {
+  readonly parent: IWord;
+  readonly previous: IChar;
+  readonly next: IChar;
+}
+```
+
+Font and color properties are implemented on the concrete `Char` class:
+
+```typescript
+declare class Char extends TextUnit implements IChar {
+  get parent(): Word;
+  get previous(): Char;
+  get next(): Char;
+  get text(): string;
+
+  get font(): Font;
+  set font(val: Font);
+  get fontFamily(): string;
+  set fontFamily(val: string);
+  get fontStyle(): string;
+  set fontStyle(val: string);
+  get fontSize(): number;
+  set fontSize(val: number);
+  get color(): Color;
+  set color(val: Color);
+
+  getType(): number;
+}
+```
+
+## Properties
+
+### Navigation
+
+<ResponseField name="parent" type="IWord">
+  The word that contains this character. Access `char.parent.parent` to reach the containing phrase.
+</ResponseField>
+
+<ResponseField name="previous" type="IChar">
+  The character immediately before this one in the video, or `null` if this is the first character.
+</ResponseField>
+
+<ResponseField name="next" type="IChar">
+  The character immediately after this one in the video, or `null` if this is the last character.
+</ResponseField>
+
+### Text
+
+<ResponseField name="text" type="string">
+  The single character string this unit represents.
+</ResponseField>
+
+### Font (get/set)
+
+<ResponseField name="font" type="Font">
+  The full font object for this character. Assigning a new `Font` instance updates all font properties at once.
+</ResponseField>
+
+<ResponseField name="fontFamily" type="string">
+  The CSS font-family name for this character. Get or set independently of other font properties.
+</ResponseField>
+
+<ResponseField name="fontStyle" type="string">
+  The CSS font-style string (e.g. `"normal"`, `"italic"`, `"bold italic"`). Get or set.
+</ResponseField>
+
+<ResponseField name="fontSize" type="number">
+  The font size in pixels. Get or set.
+</ResponseField>
+
+### Color (get/set)
+
+<ResponseField name="color" type="Color">
+  The text color of this character as a `Color` instance. Assigning a new `Color` overrides the character's color.
+
+  <Expandable title="Color properties">
+    <ResponseField name="r" type="number">Red channel, 0–255.</ResponseField>
+    <ResponseField name="g" type="number">Green channel, 0–255.</ResponseField>
+    <ResponseField name="b" type="number">Blue channel, 0–255.</ResponseField>
+    <ResponseField name="a" type="number">Alpha channel, 0–255.</ResponseField>
+    <ResponseField name="cssRgba" type="string">CSS-compatible `rgba(r,g,b,a)` string.</ResponseField>
+    <ResponseField name="cssRgb" type="string">CSS-compatible `rgb(r,g,b)` string.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Inherited from IRenderingUnit
+
+<ResponseField name="startTime" type="number">
+  Start time of this character in milliseconds.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  End time of this character in milliseconds.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  Duration of this character in milliseconds.
+</ResponseField>
+
+<ResponseField name="animate" type="RenderingUnitFunction">
+  Assign a function `(now: number, u: IRenderingUnit) => void` here to override the default template animation for this character specifically.
+</ResponseField>
+
+### progress
+
+Maps a song position to `[0, 1]` representing progress through this character's time span. Use this for within-character animations.
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+**Returns** `number` — `0.0` at `startTime`, `1.0` at `endTime`.
+
+### getType
+
+**Returns** `number` — always `3` (`UnitTypes.CHAR`) for characters.
+
+---
+
+## CharData and FontData
+
+`CharData` is the serialization format for characters. It extends both `UnitData` and `FontData`.
+
+```typescript
+export declare interface CharData extends UnitData, FontData {
+  char?: string;
+}
+
+export declare interface FontData {
+  fontFamily?: string;
+  fontSize?: number;
+  fontStyle?: string;
+}
+
+export declare interface UnitData {
+  startTime?: number;
+  endTime?: number;
+}
+```
+
+<Expandable title="CharData properties">
+  <ResponseField name="char" type="string">
+    The character string. Optional; used when constructing from JSON.
+  </ResponseField>
+  <ResponseField name="fontFamily" type="string">
+    Initial font family. Overrides the inherited value from the word or phrase.
+  </ResponseField>
+  <ResponseField name="fontSize" type="number">
+    Initial font size in pixels.
+  </ResponseField>
+  <ResponseField name="fontStyle" type="string">
+    Initial font style string.
+  </ResponseField>
+  <ResponseField name="startTime" type="number">
+    Optional override for character start time [ms].
+  </ResponseField>
+  <ResponseField name="endTime" type="number">
+    Optional override for character end time [ms].
+  </ResponseField>
+</Expandable>
+
+---
+
+## Examples
+
+### Render a character with progress-based styling in onTimeUpdate
+
+```typescript
+player.addListener({
+  onTimeUpdate(position: number) {
+    const char = player.video.findChar(position);
+    if (!char) return;
+
+    const p = char.progress(position); // 0 → 1
+
+    // Scale up as the character is being sung
+    const scale = 1 + p * 0.5;         // 1.0 → 1.5
+    const opacity = Math.min(p * 2, 1); // fade in over the first half
+
+    renderCharacter(char.text, scale, opacity);
+  }
+});
+
+function renderCharacter(text: string, scale: number, opacity: number) {
+  const el = document.getElementById('char-display')!;
+  el.textContent = text;
+  el.style.transform = `scale(${scale})`;
+  el.style.opacity = String(opacity);
+}
+```
+
+### Navigate from a character to its word and phrase
+
+```typescript
+const char = player.video.findChar(position);
+if (char) {
+  const word   = char.parent;          // IWord
+  const phrase = char.parent.parent;   // IPhrase
+
+  console.log(`char  "${char.text}"   [${char.startTime}–${char.endTime}ms]`);
+  console.log(`word  "${word.text}"   pos=${word.pos}`);
+  console.log(`phrase "${phrase.text}"`);
+}
+```
+
+### Animate each character using both position and progress
+
+```typescript
+player.addListener({
+  onVideoReady(v: IVideo) {
+    for (const char of v.chars) {
+      char.animate = (now: number) => {
+        const p = char.progress(now); // within-char progress [0, 1]
+
+        // Colour transition: white before, gold during, dim after
+        if (p <= 0) {
+          char.color = new Color('#888888');
+        } else if (p < 1) {
+          char.color = new Color('#ffd700');
+          char.fontSize = 24 + p * 8; // grow from 24 to 32 px
+        } else {
+          char.color = new Color('#ffffff');
+          char.fontSize = 24;
+        }
+      };
+    }
+  }
+});
+```
+
+<Note>
+  Setting `char.animate` suppresses the default TextAlive template animation for that character. Remove the property (set it to `null` or `undefined`) to restore default behavior.
+</Note>
+
+<Tip>
+  Use `findCharChange` on `player.video` to get precise enter/exit events rather than polling `findChar` on every frame. See the [IVideo](/api/video) reference for details.
+</Tip>

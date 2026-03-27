@@ -1,0 +1,118 @@
+---
+title: "Examples & sample code"
+description: "Explore complete working examples and sample repositories to get started building lyric apps with the TextAlive App API."
+keywords: ["examples", "sample code", "tutorial", "lyric app", "hello world"]
+---
+
+The [TextAliveJp GitHub organization](https://github.com/TextAliveJp) maintains multiple sample code repositories that demonstrate how to use the TextAlive App API. Each repository targets a specific feature or use case, so you can find a starting point that matches what you want to build.
+
+<Note>
+  The official step-by-step tutorial is available at [developer.textalive.jp/app](https://developer.textalive.jp/app). It walks you through registering an application, obtaining a token, and building your first lyric app.
+</Note>
+
+## Available sample repositories
+
+The GitHub organization hosts samples covering the following categories:
+
+- **Basic lyric display** — A "Hello World" lyric app that renders per-character text in sync with music playback. This is the recommended starting point.
+- **Beat-synchronized effects** — Visual effects that fire on detected beat timings, using the `onBeat` callback and beat data from the song map.
+- **Valence/arousal visualization** — Apps that read the valence and arousal values returned by `getValenceArousal()` and map them to visual properties such as color or size.
+- **Custom font loading** — Examples that use the font loading API (`IFontLoader`) to apply custom typefaces to lyric characters at the moment they appear.
+
+## Minimal example using script tags
+
+You can use the TextAlive App API directly in an HTML page without a build step. Include `axios` and the API bundle from unpkg, then access the API through the global `TextAliveApp` variable.
+
+```html
+<!DOCTYPE html>
+<html>
+<head><title>My Lyric App</title></head>
+<body>
+  <div id="media"></div>
+  <div id="lyrics"></div>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/textalive-app-api/dist/index.js"></script>
+  <script>
+  const { Player } = TextAliveApp;
+  const player = new Player({
+    app: { token: "your-app-token" },
+    mediaElement: document.getElementById("media")
+  });
+  player.addListener({
+    onAppReady(app) {
+      if (!app.managed) {
+        player.createFromSongUrl("https://piapro.jp/t/fnhJ/20210816203052");
+      }
+    },
+    onVideoReady(video) {
+      console.log("Lyrics loaded:", video.charCount, "characters");
+    },
+    onTimeUpdate(position) {
+      const char = player.video && player.video.findChar(position);
+      document.getElementById("lyrics").textContent = char ? char.text : "";
+    }
+  });
+  </script>
+</body>
+</html>
+```
+
+The `app.managed` check is important: when your app runs inside a TextAlive host (such as the editor), the host controls song selection. You should only call `createFromSongUrl` when `app.managed` is `false`, meaning the app is running standalone.
+
+## TypeScript / npm example
+
+If you are using a bundler such as Vite, Webpack, or esbuild, install the package and import directly:
+
+```bash
+npm install textalive-app-api
+```
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  mediaElement: document.getElementById("media")!
+});
+
+player.addListener({
+  onAppReady(app) {
+    if (!app.managed) {
+      player.createFromSongUrl("https://piapro.jp/t/fnhJ/20210816203052");
+    }
+  },
+  onVideoReady(video) {
+    console.log(`Loaded ${video.phraseCount} phrases, ${video.charCount} chars`);
+  },
+  onTimeUpdate(position) {
+    if (!player.video) return;
+    const char = player.video.findChar(position);
+    if (char) {
+      console.log(`Current char: ${char.text} (${Math.round(char.progress(position) * 100)}%)`);
+    }
+  }
+});
+```
+
+The `char.progress(position)` call returns a value between `0` and `1` representing how far through the character's vocalization the current playback position is. You can use this to drive per-character animations.
+
+<Tip>
+  Join the [Gitter community](https://gitter.im/textalive-app-api/community) if you get stuck or want to share what you have built. The developer team monitors the channel and can answer questions about specific API behaviors.
+</Tip>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub organization" icon="github" href="https://github.com/TextAliveJp">
+    Browse all official sample repositories maintained by the TextAliveJp team.
+  </Card>
+  <Card title="API reference" icon="book" href="https://developer.textalive.jp/packages/textalive-app-api">
+    Full TypeScript API reference for all classes, interfaces, and types.
+  </Card>
+  <Card title="TextAlive for Developers" icon="code" href="https://developer.textalive.jp">
+    Register your application, obtain a token, and access the developer portal.
+  </Card>
+  <Card title="Gitter community" icon="comments" href="https://gitter.im/textalive-app-api/community">
+    Ask questions and get help from the developer team and community.
+  </Card>
+</CardGroup>

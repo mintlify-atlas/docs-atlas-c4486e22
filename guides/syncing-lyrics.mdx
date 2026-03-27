@@ -1,0 +1,193 @@
+---
+title: "Syncing lyrics"
+description: "Query the current phrase, word, or character at any playback position and detect transitions between text units."
+---
+
+The TextAlive App API represents lyrics as a three-level hierarchy: **phrases** contain **words**, and words contain **characters** (`IChar`). Each unit has a `startTime` and `endTime` measured in milliseconds. During playback, you receive the current position via `onTimeUpdate` and query which text units are active.
+
+## The lyrics hierarchy
+
+```
+IVideo
+└── IPhrase[]         (a line of lyrics)
+    └── IWord[]       (a word within the line)
+        └── IChar[]   (a single character)
+```
+
+Each level implements `IRenderingUnit`, which gives you:
+- `startTime` / `endTime` — timing boundaries in ms
+- `duration` — `endTime - startTime`
+- `progress(time)` — normalized position `[0, 1]` within the unit
+- `previous` / `next` — adjacent sibling unit
+- `parent` / `children` — navigate up or down the hierarchy
+- `text` — the plain text content (from `ITextUnit`)
+
+## Finding the current unit
+
+After the video is loaded (`onVideoReady`), access `player.video` and call the `find*` methods with the current position:
+
+```typescript
+onTimeUpdate(position: number) {
+  const char   = player.video.findChar(position);
+  const word   = player.video.findWord(position);
+  const phrase = player.video.findPhrase(position);
+}
+```
+
+Each method returns the unit whose `startTime <= position <= endTime`, or `null` if no unit covers the position (e.g. between phrases).
+
+<Tip>
+  Use `onThrottledTimeUpdate` instead of `onTimeUpdate` for updates that don't need per-frame precision — such as swapping the visible phrase text in a `<div>`. This reduces unnecessary DOM updates.
+</Tip>
+
+## Detecting transitions with findCharChange
+
+Instead of finding a single unit, you can detect which units **started** or **ended** in the interval between the previous frame and the current frame:
+
+```typescript
+let prevPosition = 0;
+
+onTimeUpdate(position: number) {
+  const change = player.video.findCharChange(prevPosition, position);
+
+  for (const char of change.entered) {
+    // this character just started — show it
+    showChar(char);
+  }
+  for (const char of change.left) {
+    // this character just ended — hide or animate out
+    hideChar(char);
+  }
+
+  prevPosition = position;
+}
+```
+
+The same pattern works for `findWordChange` and `findPhraseChange`.
+
+## TimedObjectsInRange
+
+All `find*Change` methods return a `TimedObjectsInRange<T>` object:
+
+```typescript
+interface TimedObjectsInRange<T extends TimedObject> {
+  current:  T | null;  // unit overlapping the end of the range
+  entered:  T[];       // units that started within the range
+  left:     T[];       // units that ended within the range
+  previous: T | null;  // last unit before the range
+  next:     T | null;  // first unit after the range
+}
+```
+
+Use `entered` and `left` to trigger animations precisely at the moment a character begins or finishes being sung.
+
+## The progress() method
+
+Every text unit has a `progress(time)` method that maps the given song position to a value in `[0, 1]`:
+
+- `progress(startTime)` → `0.0`
+- `progress(endTime)` → `1.0`
+
+This is the key to smooth interpolation. Combine it with an easing function to animate properties like scale, opacity, or position:
+
+```typescript
+onTimeUpdate(position: number) {
+  const char = player.video.findChar(position);
+  if (!char) return;
+
+  const t = char.progress(position); // [0, 1]
+  element.style.opacity = String(t);
+}
+```
+
+See the [Animation guide](/guides/animation) for how to apply easing functions to `progress()`.
+
+## Accessing text content
+
+Every `IChar`, `IWord`, and `IPhrase` has a `text` property returning the plain string:
+
+```typescript
+const char   = player.video.findChar(position);
+const word   = player.video.findWord(position);
+const phrase = player.video.findPhrase(position);
+
+console.log(char?.text);   // e.g. "歌"
+console.log(word?.text);   // e.g. "歌詞"
+console.log(phrase?.text); // e.g. "歌詞を表示する"
+```
+
+## Traversing the hierarchy
+
+Navigate between units using `parent`, `previous`, and `next`:
+
+```typescript
+const char = player.video.findChar(position);
+if (!char) return;
+
+const word   = char.parent;         // IWord
+const phrase = char.parent.parent;  // IPhrase
+
+const prevChar = char.previous;     // IChar | null
+const nextChar = char.next;         // IChar | null
+
+const prevWord = word.previous;     // IWord | null
+const nextWord = word.next;         // IWord | null
+```
+
+This lets you, for example, look ahead at the next character to pre-calculate layout, or look back at the previous word for context.
+
+## Using findTimedObject and findTimedObjectsInRange
+
+The SDK also exports two standalone utility functions that work on any array of `TimedObject` values:
+
+```typescript
+import { findTimedObject, findTimedObjectsInRange } from "textalive-app-api";
+
+// Find the beat at the current position
+const beat = findTimedObject(player.getBeats(), position);
+
+// Find beats that started or ended in the last frame
+const beatChange = findTimedObjectsInRange(
+  player.getBeats(),
+  prevPosition,
+  position
+);
+```
+
+These functions perform binary search and are the same implementation used internally by `findChar`, `findWord`, etc.
+
+## Complete example: displaying the current character
+
+The example below shows a minimal lyric display that updates a `<div>` on every frame:
+
+```typescript
+import { Player, IVideo, IPlayerApp, IChar } from "textalive-app-api";
+
+const display = document.querySelector<HTMLDivElement>("#char-display")!;
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  mediaElement: document.querySelector("#media")!,
+});
+
+player.addListener({
+  onAppReady(app: IPlayerApp) {
+    if (!app.managed) {
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+    }
+  },
+
+  onTimeUpdate(position: number) {
+    const char: IChar | null = player.video?.findChar(position) ?? null;
+
+    if (char) {
+      // Show the character text, scaled by its progress through its time window
+      const t = char.progress(position);
+      display.textContent = char.text;
+      display.style.opacity = String(t);
+    } else {
+      display.textContent = "";
+    }
+  },
+});
+```

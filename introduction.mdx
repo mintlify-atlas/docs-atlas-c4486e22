@@ -1,0 +1,58 @@
+---
+title: "Introduction"
+description: "TextAlive App API is a JavaScript/TypeScript SDK for building lyric apps — web applications that display lyrics synchronized with music playback."
+---
+
+## What is TextAlive App API?
+
+TextAlive App API lets you build **lyric apps**: web applications that display song lyrics in sync with live music playback. Unlike static lyric videos where each frame is pre-rendered as an image, lyric apps react in real time to the music — animating characters, phrases, and words at the exact millisecond each syllable is vocalized.
+
+The API retrieves rich music scene data for songs registered on [TextAlive](https://textalive.jp), including:
+
+- **Beat and chord timings** — know exactly when each beat or chord change occurs
+- **Repetitive segment detection** — identify chorus and verse boundaries
+- **Character-level lyric timings** — get the precise start and end time for every character in the song
+- **Morphological analysis** — access part-of-speech data for Japanese and English lyrics
+- **Vocal amplitude and valence/arousal values** — respond to the emotional texture of the music
+
+## How it works
+
+Your lyric app talks to two platforms:
+
+- **TextAlive** — hosts song metadata, lyrics timing data, and the developer platform where you register your app and obtain a token.
+- **Songle** — provides the underlying music analysis (beat detection, chord estimation, repetitive segment detection) that TextAlive builds on.
+
+When your app loads a song via `createFromSongUrl`, the `Player` fetches all the associated music scene data from the TextAlive servers and constructs a `Video` object — a structured, time-indexed representation of every phrase, word, and character in the lyrics. Your rendering loop then queries this object on every animation frame to find what is being sung right now.
+
+## Getting an app token
+
+Almost all API features require an application token. You register your app and generate a token at [developer.textalive.jp](https://developer.textalive.jp). Pass the token when constructing a `Player`:
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your_app_token_here" },
+});
+```
+
+<Note>
+  All API documentation on [developer.textalive.jp](https://developer.textalive.jp/packages/textalive-app-api) is bilingual — every class, interface, and method description is written in both Japanese and English.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get a working lyric app running in under 5 minutes.
+  </Card>
+  <Card title="Player" icon="circle-play" href="/concepts/player">
+    Learn how the Player class manages playback, events, and song data.
+  </Card>
+  <Card title="API reference" icon="code" href="/api/player">
+    Full reference for the Player class and all its methods.
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/resources/examples">
+    Browse sample apps from the TextAlive GitHub organization.
+  </Card>
+</CardGroup>

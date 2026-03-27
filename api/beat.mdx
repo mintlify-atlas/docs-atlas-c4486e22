@@ -1,0 +1,213 @@
+---
+title: "Beat (IBeat)"
+description: "Represents a single beat in the musical timeline, with position, bar context, and progress helpers for animation."
+---
+
+`IBeat` extends `TimedObject` and represents one beat in the song's rhythmic structure. Beats are produced by Songle's beat detection analysis and are available through `player.data.songMap.beats` or the `player.getBeats()` helper after `onVideoReady`.
+
+Each beat knows its position within its bar (`position`), the total number of beats per bar (`length`), and its global index in the song (`index`). The `progress()` method maps the current playback position to a `[0, 1]` value within the beat, which is ideal for driving smooth animations.
+
+## IBeat properties
+
+### TimedObject base
+
+<ResponseField name="startTime" type="number">
+  When this beat starts, in milliseconds from the beginning of the song.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  When this beat ends, in milliseconds. This is the same as the `startTime` of the next beat.
+</ResponseField>
+
+### Beat-specific
+
+<ResponseField name="duration" type="number" required>
+  Duration of this beat in milliseconds (`endTime - startTime`). Read-only.
+</ResponseField>
+
+<ResponseField name="length" type="number">
+  Total number of beats in the bar that this beat belongs to. Typically `4` for 4/4 time, but may vary.
+</ResponseField>
+
+<ResponseField name="position" type="number">
+  This beat's zero-indexed position within its bar. A value of `0` means this is the downbeat (first beat) of the bar.
+</ResponseField>
+
+<ResponseField name="index" type="number">
+  This beat's zero-indexed position in the entire song, counting from the first beat.
+</ResponseField>
+
+<ResponseField name="previous" type="IBeat">
+  The beat immediately before this one. `null` for the first beat in the song.
+</ResponseField>
+
+<ResponseField name="next" type="IBeat">
+  The beat immediately after this one. `null` for the last beat in the song.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="progress(time)" type="number">
+  Maps the given song position `time` (in ms) to a `[0, 1]` value representing how far through this beat the song currently is.
+
+  - `0.0` — at the very start of this beat
+  - `0.5` — halfway through
+  - `1.0` — at the end (i.e., the start of the next beat)
+
+  <ParamField query="time" type="number" required>
+    Current playback position in milliseconds.
+  </ParamField>
+</ResponseField>
+
+## Player query methods
+
+You can query beats through the `player` instance without accessing the song map directly.
+
+### getBeats
+
+```typescript
+player.getBeats(): IBeat[]
+```
+
+Returns the full array of beats for the current song. Returns an empty array if no song map is loaded.
+
+### findBeat
+
+```typescript
+player.findBeat(time: number, options?: PlayerFindOptions): IBeat
+```
+
+Finds the beat that contains (or is nearest to) the given `time` in milliseconds. Returns `null` if no beat is found.
+
+<ParamField query="time" type="number" required>
+  Playback position in milliseconds to search at.
+</ParamField>
+
+<ParamField query="options" type="PlayerFindOptions">
+  Optional search behavior. `PlayerFindOptions` is an alias for `FindTimedObjectOptions`:
+
+  ```typescript
+  type PlayerFindOptions =
+    | { endTime?: number }   // find a beat overlapping this range
+    | { loose?: boolean };   // always return nearest result from binary search
+  ```
+</ParamField>
+
+### findBeatChange
+
+```typescript
+player.findBeatChange(
+  startTime: number,
+  endTime: number
+): TimedObjectsInRange<IBeat>
+```
+
+Looks for beat transitions within the given time range. Returns a `TimedObjectsInRange<IBeat>` with `entered`, `left`, `current`, `previous`, and `next` fields.
+
+<ParamField query="startTime" type="number" required>
+  Start of the time range in milliseconds (typically the previous frame's position).
+</ParamField>
+
+<ParamField query="endTime" type="number" required>
+  End of the time range in milliseconds (typically the current position).
+</ParamField>
+
+## Using beat progress for animation
+
+The `progress()` method returns a linear `[0, 1]` ratio. You can apply an easing function from the `Ease` class to create more expressive visuals:
+
+```typescript
+import { Player, Ease } from "textalive-app-api";
+
+player.addListener({
+  onTimeUpdate(position) {
+    const beat = player.findBeat(position);
+    if (!beat) return;
+
+    // Linear progress through the current beat
+    const t = beat.progress(position);
+
+    // Apply a cubic ease-out for a bouncy feel
+    const eased = Ease.cubicOut(t);
+
+    // Use the eased value to animate an element
+    element.style.transform = `scale(${1 + eased * 0.2})`;
+  },
+});
+```
+
+## Detecting downbeats
+
+Check `beat.position === 0` to identify the first beat of each bar (the downbeat):
+
+```typescript
+player.addListener({
+  onTimeUpdate(position) {
+    const beatChange = player.findBeatChange(
+      player.videoPosition,
+      position
+    );
+
+    for (const beat of beatChange.entered) {
+      if (beat.position === 0) {
+        // This is the first beat of a new bar
+        console.log(
+          `Downbeat! Bar boundary at ${beat.startTime}ms` +
+          ` (${beat.length} beats per bar)`
+        );
+      }
+    }
+  },
+});
+```
+
+## Complete example: flash on every downbeat
+
+The following example flashes a DOM element on every downbeat (first beat of a bar):
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-token" },
+});
+
+const flashEl = document.getElementById("flash")!;
+
+player.addListener({
+  onVideoReady() {
+    console.log("Beats loaded:", player.getBeats().length);
+  },
+
+  onTimeUpdate(position: number) {
+    const beatChange = player.findBeatChange(
+      player.videoPosition,
+      position
+    );
+
+    for (const beat of beatChange.entered) {
+      if (beat.position === 0) {
+        // Trigger a CSS animation on downbeat
+        flashEl.classList.remove("flash");
+        void flashEl.offsetWidth; // reflow to restart animation
+        flashEl.classList.add("flash");
+      }
+    }
+  },
+});
+```
+
+```css
+.flash {
+  animation: flash-anim 0.3s ease-out;
+}
+
+@keyframes flash-anim {
+  from { background-color: white; }
+  to   { background-color: transparent; }
+}
+```
+
+<Tip>
+  `findBeatChange` is preferred over `findBeat` in `onTimeUpdate` because it correctly handles rapid seeks and dropped frames by reporting all beats entered or left in the interval, not just the beat at the current moment.
+</Tip>

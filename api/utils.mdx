@@ -1,0 +1,457 @@
+---
+title: "Utility functions"
+description: "Helper functions and classes for working with timed objects, 2D transforms, colors, and data URLs."
+---
+
+This page documents the utility functions and supporting classes exported by the TextAlive App API SDK.
+
+## Timed object search
+
+### findTimedObject
+
+```typescript
+function findTimedObject<T extends TimedObject>(
+  objects: T[],
+  time: number,
+  options?: FindTimedObjectOptions
+): T
+```
+
+Binary-searches a sorted array of timed objects and returns the one that contains the given `time`. Returns `undefined` if no object contains the specified time (unless `loose` is set).
+
+<ParamField path="objects" type="T[]">
+  A sorted array of `TimedObject` instances.
+</ParamField>
+
+<ParamField path="time" type="number">
+  The target time in milliseconds.
+</ParamField>
+
+<ParamField path="options" type="FindTimedObjectOptions">
+  Optional search modifiers. See [FindTimedObjectOptions](#findtimedobjectoptions).
+</ParamField>
+
+### findTimedObjectsInRange
+
+```typescript
+function findTimedObjectsInRange<T extends TimedObject>(
+  sortedArray: T[],
+  startTime: number,
+  endTime: number
+): TimedObjectsInRange<T>
+```
+
+Returns all timed objects that started or ended within the time range `[startTime, endTime]`. Use this in `onTimeUpdate` to detect transitions — for example, characters that began or finished vocalization during the last frame.
+
+<ParamField path="sortedArray" type="T[]">
+  A sorted array of `TimedObject` instances.
+</ParamField>
+
+<ParamField path="startTime" type="number">
+  Start of the query range in milliseconds.
+</ParamField>
+
+<ParamField path="endTime" type="number">
+  End of the query range in milliseconds.
+</ParamField>
+
+## Data URL utilities
+
+### dataUrlToString
+
+```typescript
+function dataUrlToString(url: string): string
+```
+
+Decodes a data URL that encodes a UTF-8 string in Base64 format and returns the original string.
+
+<ParamField path="url" type="string">
+  A Base64-encoded data URL.
+</ParamField>
+
+### stringToDataUrl
+
+```typescript
+function stringToDataUrl(text: string): string
+```
+
+Encodes a UTF-8 string in Base64 format and returns it as a data URL (the inverse of `dataUrlToString`).
+
+<ParamField path="text" type="string">
+  The UTF-8 string to encode.
+</ParamField>
+
+### isStringEncodedDataUrl
+
+```typescript
+function isStringEncodedDataUrl(url: string): boolean
+```
+
+Returns `true` if the given string is a Base64-encoded data URL that encodes a UTF-8 string.
+
+<ParamField path="url" type="string">
+  The string to test.
+</ParamField>
+
+## Supporting types
+
+### TimedObject
+
+The base interface for all time-ranged objects in the API.
+
+<ResponseField name="startTime" type="number">
+  Start of the time range in milliseconds.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  End of the time range in milliseconds.
+</ResponseField>
+
+<ResponseField name="contains(time)" type="(time: number) => boolean">
+  Returns `true` if the time range contains the given time (start and end inclusive).
+</ResponseField>
+
+<ResponseField name="overlaps(obj)" type="(obj: TimedObject) => boolean">
+  Returns `true` if another `TimedObject`'s range overlaps this range.
+</ResponseField>
+
+### TimedUnit
+
+`TimedUnit` is an abstract base class you can extend to create custom timed objects compatible with the `findTimedObject` and `findTimedObjectsInRange` APIs.
+
+```typescript
+abstract class TimedUnit implements TimedObject {
+  abstract startTime: number;
+  abstract endTime: number;
+  get duration(): number;
+  contains(time: number): boolean;
+  overlaps(objOrStartTime: TimedObject | number, endTime?: number): boolean;
+  progress(time: number): number;
+}
+```
+
+Extend `TimedUnit` and provide `startTime` and `endTime` to gain `duration`, `contains`, `overlaps`, and `progress` for free:
+
+```typescript
+import { TimedUnit } from "textalive-app-api";
+
+class MyEvent extends TimedUnit {
+  constructor(public startTime: number, public endTime: number) {
+    super();
+  }
+}
+
+const event = new MyEvent(1000, 2000);
+console.log(event.duration);          // 1000
+console.log(event.contains(1500));    // true
+console.log(event.progress(1500));    // 0.5
+```
+
+### ValenceArousalValue
+
+The return type of `player.getValenceArousal()` and `player.getMedianValenceArousal()`. Both values are normalized to the range `[-1, 1]` and are comparable across songs (not relative to a single song).
+
+<ResponseField name="v" type="number">
+  Valence — the positivity/negativity of the music's emotional content. Ranges from `-1` (negative) to `1` (positive).
+</ResponseField>
+
+<ResponseField name="a" type="number">
+  Arousal — the energy/excitement level of the music. Ranges from `-1` (calm) to `1` (excited).
+</ResponseField>
+
+```typescript
+// Requires valenceArousalEnabled: true in PlayerOptions
+const va = player.getValenceArousal(position);
+console.log(`Valence: ${va.v.toFixed(2)}, Arousal: ${va.a.toFixed(2)}`);
+```
+
+<Note>
+  You must set `valenceArousalEnabled: true` in `PlayerOptions` before loading a song for valence/arousal data to be available.
+</Note>
+
+### UnitTypes
+
+A constant object containing the numeric type codes returned by `IRenderingUnit.getType()`.
+
+```typescript
+const UnitTypes: {
+  NONE: number;     // 0
+  PHRASE: number;   // 1
+  WORD: number;     // 2
+  CHAR: number;     // 3
+  GRAPHIC: number;  // 4
+  ALL: number;      // bitmask for all types
+  PUBLIC: number;   // bitmask for public types (phrase + word + char)
+}
+```
+
+Use `UnitTypes` to check the type of any rendering unit:
+
+```typescript
+import { UnitTypes } from "textalive-app-api";
+
+player.addListener({
+  onTimeUpdate(position) {
+    const unit = player.video?.findChar(position);
+    if (unit && unit.getType() === UnitTypes.CHAR) {
+      // handle character
+    }
+  }
+});
+```
+
+### FindTimedObjectOptions
+
+Controls the behavior of `findTimedObject`. Provide one of the following shapes:
+
+<ResponseField name="endTime" type="number (optional)">
+  When set, `findTimedObject` returns an object that overlaps the range `[time, endTime]` rather than a single point in time.
+</ResponseField>
+
+<ResponseField name="loose" type="boolean (optional)">
+  When `true`, the nearest result from the binary search is always returned, even if the specified time is not contained within the object's range.
+</ResponseField>
+
+### TimedObjectsInRange\<T\>
+
+The return type of `findTimedObjectsInRange` and the `findXxxChange` methods on `IPlayer` and `IVideo`.
+
+<ResponseField name="current" type="T | null">
+  The timed object that overlaps with the end time of the queried range, or `null`.
+</ResponseField>
+
+<ResponseField name="entered" type="T[]">
+  Objects whose `startTime` falls within the queried range.
+</ResponseField>
+
+<ResponseField name="left" type="T[]">
+  Objects whose `endTime` falls within the queried range.
+</ResponseField>
+
+<ResponseField name="previous" type="T | null">
+  The last timed object that ends before the queried range, or `null`.
+</ResponseField>
+
+<ResponseField name="next" type="T | null">
+  The first timed object that starts after the queried range, or `null`.
+</ResponseField>
+
+### DecomposedProps
+
+The result of decomposing a `Matrix2D` into its component transform values.
+
+<ResponseField name="x" type="number (optional)">
+  Horizontal translation.
+</ResponseField>
+
+<ResponseField name="y" type="number (optional)">
+  Vertical translation.
+</ResponseField>
+
+<ResponseField name="scaleX" type="number (optional)">
+  Horizontal scale factor.
+</ResponseField>
+
+<ResponseField name="scaleY" type="number (optional)">
+  Vertical scale factor.
+</ResponseField>
+
+<ResponseField name="skewX" type="number (optional)">
+  Horizontal skew in degrees.
+</ResponseField>
+
+<ResponseField name="skewY" type="number (optional)">
+  Vertical skew in degrees.
+</ResponseField>
+
+<ResponseField name="rotation" type="number (optional)">
+  Rotation in degrees.
+</ResponseField>
+
+## Matrix2D
+
+`Matrix2D` represents a 3x3 affine transformation matrix in the form:
+
+```
+[ a  c  tx
+  b  d  ty
+  0  0  1  ]
+```
+
+All mutating methods return `this`, making them chainable.
+
+### Constructor
+
+```typescript
+new Matrix2D(a?: number, b?: number, c?: number, d?: number, tx?: number, ty?: number)
+```
+
+### Static members
+
+<ResponseField name="Matrix2D.identity" type="Matrix2D">
+  A shared identity matrix representing a null transformation. Do not mutate this instance.
+</ResponseField>
+
+<ResponseField name="Matrix2D.DEG_TO_RAD" type="number">
+  Multiplier for converting degrees to radians (`Math.PI / 180`).
+</ResponseField>
+
+### Instance properties
+
+<ResponseField name="a" type="number">Position (0, 0) in the matrix.</ResponseField>
+<ResponseField name="b" type="number">Position (0, 1) in the matrix.</ResponseField>
+<ResponseField name="c" type="number">Position (1, 0) in the matrix.</ResponseField>
+<ResponseField name="d" type="number">Position (1, 1) in the matrix.</ResponseField>
+<ResponseField name="tx" type="number">Horizontal translation (position (2, 0)).</ResponseField>
+<ResponseField name="ty" type="number">Vertical translation (position (2, 1)).</ResponseField>
+
+### Methods
+
+<ResponseField name="setValues" type="(a?, b?, c?, d?, tx?, ty?) => Matrix2D">
+  Sets all matrix values at once. Returns `this`.
+</ResponseField>
+
+<ResponseField name="append" type="(a, b, c, d, tx, ty) => Matrix2D">
+  Appends raw matrix properties: equivalent to `this * specified`. Returns `this`.
+</ResponseField>
+
+<ResponseField name="prepend" type="(a, b, c, d, tx, ty) => Matrix2D">
+  Prepends raw matrix properties: equivalent to `specified * this`. Returns `this`.
+</ResponseField>
+
+<ResponseField name="appendMatrix" type="(matrix: Matrix2D) => Matrix2D">
+  Appends another `Matrix2D`: equivalent to `this * matrix`. Returns `this`.
+</ResponseField>
+
+<ResponseField name="prependMatrix" type="(matrix: Matrix2D) => Matrix2D">
+  Prepends another `Matrix2D`: equivalent to `matrix * this`. Returns `this`.
+</ResponseField>
+
+<ResponseField name="appendTransform" type="(x, y, scaleX, scaleY, rotation, skewX, skewY, regX?, regY?) => Matrix2D">
+  Generates matrix values from display-object transform properties and appends them to this matrix. Returns `this`.
+
+  <Expandable title="Parameters">
+    <ParamField path="x" type="number">Horizontal translation.</ParamField>
+    <ParamField path="y" type="number">Vertical translation.</ParamField>
+    <ParamField path="scaleX" type="number">Horizontal scale.</ParamField>
+    <ParamField path="scaleY" type="number">Vertical scale.</ParamField>
+    <ParamField path="rotation" type="number">Rotation in degrees.</ParamField>
+    <ParamField path="skewX" type="number">Horizontal skew in degrees.</ParamField>
+    <ParamField path="skewY" type="number">Vertical skew in degrees.</ParamField>
+    <ParamField path="regX" type="number">Optional registration (pivot) X offset.</ParamField>
+    <ParamField path="regY" type="number">Optional registration (pivot) Y offset.</ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="rotate" type="(angle: number) => Matrix2D">
+  Applies a clockwise rotation. `angle` is in degrees; multiply by `Matrix2D.DEG_TO_RAD` to use radians. Returns `this`.
+</ResponseField>
+
+<ResponseField name="scale" type="(x: number, y: number) => Matrix2D">
+  Applies a scale transformation. Returns `this`.
+</ResponseField>
+
+<ResponseField name="translate" type="(x: number, y: number) => Matrix2D">
+  Translates the matrix on the x and y axes. Returns `this`.
+</ResponseField>
+
+<ResponseField name="skew" type="(skewX: number, skewY: number) => Matrix2D">
+  Applies a skew transformation. Both arguments are in degrees. Returns `this`.
+</ResponseField>
+
+<ResponseField name="identity" type="() => Matrix2D">
+  Resets the matrix to the identity transformation. Returns `this`.
+</ResponseField>
+
+<ResponseField name="invert" type="() => Matrix2D">
+  Inverts the matrix so it performs the opposite transformation. Returns `this`.
+</ResponseField>
+
+<ResponseField name="isIdentity" type="() => boolean">
+  Returns `true` if this is an identity matrix.
+</ResponseField>
+
+<ResponseField name="equals" type="(matrix: Matrix2D) => boolean">
+  Returns `true` if all property values equal those of `matrix`.
+</ResponseField>
+
+<ResponseField name="decompose" type="(target?: DecomposedProps) => DecomposedProps">
+  Decomposes the matrix into `x`, `y`, `scaleX`, `scaleY`, `skewX`, `skewY`, and `rotation`. If `target` is provided, properties are written to it; otherwise a new object is returned.
+</ResponseField>
+
+<ResponseField name="transformPoint" type="(x: number, y: number, pt?: IPoint) => IPoint">
+  Transforms a point according to this matrix. If `pt` is provided, the result is written into it; otherwise a new object is returned.
+</ResponseField>
+
+<ResponseField name="clone" type="() => Matrix2D">
+  Returns a new `Matrix2D` with the same values.
+</ResponseField>
+
+<ResponseField name="copy" type="(matrix: Matrix2D) => Matrix2D">
+  Copies all properties from `matrix` into this instance. Returns `this`.
+</ResponseField>
+
+<ResponseField name="toString" type="() => string">
+  Returns a string representation of this matrix.
+</ResponseField>
+
+## Point
+
+`Point` represents a coordinate on a 2D x/y plane.
+
+### Constructor
+
+```typescript
+new Point(x?: number, y?: number)
+```
+
+### Properties
+
+<ResponseField name="x" type="number">The x coordinate.</ResponseField>
+<ResponseField name="y" type="number">The y coordinate.</ResponseField>
+
+### Methods
+
+<ResponseField name="setValues" type="(x?: number, y?: number) => Point">
+  Sets `x` and `y`. Returns `this`.
+</ResponseField>
+
+<ResponseField name="clone" type="() => Point">
+  Returns a new `Point` with the same coordinates.
+</ResponseField>
+
+<ResponseField name="copy" type="(point: Point) => Point">
+  Copies coordinates from `point` into this instance. Returns `this`.
+</ResponseField>
+
+<ResponseField name="toString" type="() => string">
+  Returns a string representation of this point.
+</ResponseField>
+
+## Other exports
+
+### PlayerLogoImage
+
+```typescript
+const PlayerLogoImage: string
+```
+
+SVG markup string for the TextAlive logo. The SVG uses two CSS classes you can target for theming:
+
+- `.bg` — background fill (default: `#1f4391`)
+- `.fg` — foreground fill (default: `#fff`)
+
+### RegionalText
+
+```typescript
+type RegionalText = { [lang: string]: string };
+```
+
+A multi-language string type used for human-readable labels in the TextAlive UI (for example, parameter titles). Use the `"ja"` key for Japanese and the `"en"` key for English.
+
+```typescript
+const title: RegionalText = {
+  en: "Speed",
+  ja: "速度",
+};
+```

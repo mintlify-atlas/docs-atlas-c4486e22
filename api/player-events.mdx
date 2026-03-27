@@ -1,0 +1,571 @@
+---
+title: "Player events"
+description: "Callback interfaces for reacting to player state changes, app lifecycle events, and data loading progress."
+---
+
+The TextAlive App API uses a listener pattern for all events. Register a listener object with [`player.addListener()`](/api/player#addlistener) and implement only the callbacks you need.
+
+```typescript
+player.addListener({
+  onVideoReady(video) { /* ... */ },
+  onTimeUpdate(position) { /* ... */ },
+});
+```
+
+## PlayerListener
+
+`PlayerListener` is the full composite type that `addListener` and `removeListener` accept:
+
+```typescript
+type PlayerListener = PlayerEventListener & PlayerAppListener & LoaderListener;
+```
+
+Where `LoaderListener` expands to:
+
+```typescript
+type LoaderListener = DataLoaderListener & BackgroundGraphicsListener & TemplateListener;
+type DataLoaderListener = VideoLoaderListener & SongLoaderListener & TextLoaderListener & FontLoaderListener;
+```
+
+You only need to implement the callbacks relevant to your app — all properties are optional.
+
+<Tip>
+  **Recommended initialization order:**
+  `onAppLoad` → `onAppReady` → `onVideoReady` → `onTimerReady` → `onPlay` → `onTimeUpdate`
+
+  Wait for `onVideoReady` before querying the video object, and wait for `onTimerReady` before calling `requestPlay()`.
+</Tip>
+
+---
+
+## PlayerEventListener
+
+Callbacks for core player state changes: video loading, playback, seeking, and frame updates.
+
+### onVideoReady
+
+```typescript
+onVideoReady?(v: IVideo): void
+```
+
+Called when the video object has been constructed and is ready to query.
+
+<ParamField path="v" type="IVideo">
+  The constructed video object containing phrases, words, and characters with timing information.
+</ParamField>
+
+---
+
+### onTimerReady
+
+```typescript
+onTimerReady?(timer: Timer): void
+```
+
+Called when the `Timer` has finished initializing and the player is ready for playback. Call `requestPlay()` from here or after this event.
+
+<ParamField path="timer" type="Timer">
+  The active timer instance.
+</ParamField>
+
+---
+
+### onMediaElementSet
+
+```typescript
+onMediaElementSet?(el: HTMLElement): void
+```
+
+Called when the `mediaElement` property is updated — either during initialization or when you assign a new element to `player.mediaElement`.
+
+<ParamField path="el" type="HTMLElement">
+  The new media host element.
+</ParamField>
+
+---
+
+### onVolumeUpdate
+
+```typescript
+onVolumeUpdate?(volume: number): void
+```
+
+Called when the player volume changes.
+
+<ParamField path="volume" type="number">
+  The new volume level, in the range `[0, 100]`.
+</ParamField>
+
+---
+
+### onTimeUpdate
+
+```typescript
+onTimeUpdate?(position: number): void
+```
+
+Called on every render frame while the song is playing. This is the primary hook for per-frame animation logic.
+
+<Note>
+  This event is suppressed while `isVideoSeeking` is `true`. Use [`onVideoSeek`](#onvideoseek) during seek operations instead.
+</Note>
+
+<ParamField path="position" type="number">
+  Current video position in milliseconds.
+</ParamField>
+
+---
+
+### onThrottledTimeUpdate
+
+```typescript
+onThrottledTimeUpdate?(position: number): void
+```
+
+A throttled version of `onTimeUpdate`. Fires at most once per `throttleInterval` milliseconds (configured in [`PlayerOptions`](/api/player-options#throttleinterval)). Useful for updating UI elements that don't need frame-rate precision.
+
+<ParamField path="position" type="number">
+  Current video position in milliseconds.
+</ParamField>
+
+---
+
+### onMediaSeek
+
+```typescript
+onMediaSeek?(position: number): void
+```
+
+Called when the underlying media playback position updates — this reflects the audio clock, which may differ slightly from `videoPosition`.
+
+<ParamField path="position" type="number">
+  Current media position in milliseconds.
+</ParamField>
+
+---
+
+### onVideoSeekStart
+
+```typescript
+onVideoSeekStart?(): void
+```
+
+Called when a video seek operation begins (i.e., when `startVideoSeek()` is called and `isVideoSeeking` becomes `true`).
+
+---
+
+### onVideoSeek
+
+```typescript
+onVideoSeek?(position: number): void
+```
+
+Called each time the video position is updated during an active seek operation.
+
+<ParamField path="position" type="number">
+  The updated video position in milliseconds.
+</ParamField>
+
+---
+
+### onVideoSeekEnd
+
+```typescript
+onVideoSeekEnd?(): void
+```
+
+Called when the seek operation ends (i.e., when `endVideoSeek()` is called and `isVideoSeeking` becomes `false`).
+
+---
+
+### onPlay
+
+```typescript
+onPlay?(): void
+```
+
+Called when playback starts (after `requestPlay()` succeeds).
+
+---
+
+### onPause
+
+```typescript
+onPause?(): void
+```
+
+Called when playback is paused (after `requestPause()` succeeds).
+
+---
+
+### onStop
+
+```typescript
+onStop?(): void
+```
+
+Called when playback stops and the position rewinds to the beginning (after `requestStop()`).
+
+---
+
+### onSeek
+
+```typescript
+onSeek?(position: number): void
+```
+
+Called when the media position is manually changed by a user action (e.g., dragging a seekbar).
+
+<ParamField path="position" type="number">
+  The target seek position in milliseconds.
+</ParamField>
+
+---
+
+### onSeekComplete
+
+```typescript
+onSeekComplete?(position: number): void
+```
+
+Called after a seek initiated by `onSeek` has completed successfully.
+
+<ParamField path="position" type="number">
+  The final media position after the seek completes, in milliseconds.
+</ParamField>
+
+---
+
+### onDispose
+
+```typescript
+onDispose?(): void
+```
+
+Called just before the player is destroyed by `dispose()`. Use this to clean up any resources tied to the player's lifecycle.
+
+---
+
+## PlayerAppListener
+
+Callbacks for the lyric app lifecycle: server connection, host readiness, and parameter/media updates from the TextAlive host.
+
+### onAppLoad
+
+```typescript
+onAppLoad?(app: IPlayerApp, error?: string): void
+```
+
+Called when the connection to the TextAlive App API server is established (or fails). This fires on every page load, whether or not a host is present.
+
+<ParamField path="app" type="IPlayerApp">
+  The app status object, including server info and initial song URL from query parameters.
+</ParamField>
+
+<ParamField path="error" type="string">
+  An error message if the server connection failed.
+</ParamField>
+
+---
+
+### onAppReady
+
+```typescript
+onAppReady?(app: IPlayerApp): void
+```
+
+Called when the connection to a TextAlive host is established and the host confirms the app is ready. If no host is connected, this fires shortly after `onAppLoad` with `app.managed === false`.
+
+This is the recommended place to call `createFromSongUrl()` when running standalone (without a host).
+
+<ParamField path="app" type="IPlayerApp">
+  The app status object. Check `app.managed` to determine whether a host is connected.
+</ParamField>
+
+---
+
+### onAppParameterUpdate
+
+```typescript
+onAppParameterUpdate?(name: string, value: ParameterValue): void
+```
+
+Called when a parameter value is updated by the TextAlive host. The `name` corresponds to a `ParameterWidget.name` defined in [`PlayerAppOptions.parameters`](/api/player-options#app).
+
+<ParamField path="name" type="string">
+  The parameter variable name.
+</ParamField>
+
+<ParamField path="value" type="ParameterValue">
+  The new parameter value. `ParameterValue` is `IColor | string | number | boolean`.
+</ParamField>
+
+---
+
+### onAppMediaChange
+
+```typescript
+onAppMediaChange?(songUrl: string, videoPromise?: Promise<IVideo>): void
+```
+
+Called when the host instructs the app to change the currently playing song.
+
+<ParamField path="songUrl" type="string">
+  The new song URL specified by the host.
+</ParamField>
+
+<ParamField path="videoPromise" type="Promise<IVideo>">
+  A promise that resolves when the new video object and `Timer` are ready.
+</ParamField>
+
+---
+
+## SongLoaderListener
+
+Callbacks that fire as individual components of the song map are loaded. These are part of `LoaderListener` via `DataLoaderListener`.
+
+### onSongLoad
+
+```typescript
+onSongLoad?(song: SongleSong, reason?: Error): void
+```
+
+Called when the song's basic metadata (title, artist, duration, permalink) is loaded.
+
+<ParamField path="song" type="SongleSong">
+  The loaded song metadata object.
+</ParamField>
+
+<ParamField path="reason" type="Error">
+  Present if loading failed.
+</ParamField>
+
+---
+
+### onSongMapLoad
+
+```typescript
+onSongMapLoad?(songMap: ISongMap, reason?: Error): void
+```
+
+Called when beat, chord, and repetitive segment data are loaded.
+
+<ParamField path="songMap" type="ISongMap">
+  The loaded song map containing beats, chords, and segments.
+</ParamField>
+
+<ParamField path="reason" type="Error">
+  Present if loading failed.
+</ParamField>
+
+---
+
+### onVocalAmplitudeLoad
+
+```typescript
+onVocalAmplitudeLoad?(vocalAmplitude: VocalAmplitude, reason?: Error): void
+```
+
+Called when vocal amplitude data finishes loading. Requires `vocalAmplitudeEnabled: true` in `PlayerOptions`.
+
+<Note>
+  Use `player.getVocalAmplitude(position)` and `player.getMaxVocalAmplitude()` to retrieve vocal amplitude values — do not use the raw `vocalAmplitude` parameter directly.
+</Note>
+
+<ParamField path="reason" type="Error">
+  Present if loading failed.
+</ParamField>
+
+---
+
+### onValenceArousalLoad
+
+```typescript
+onValenceArousalLoad?(valenceArousal: ValenceArousal, reason?: Error): void
+```
+
+Called when valence/arousal data finishes loading. Requires `valenceArousalEnabled: true` in `PlayerOptions`.
+
+<Note>
+  Use `player.getValenceArousal(position)` and `player.getMedianValenceArousal()` to retrieve valence/arousal values — do not use the raw `valenceArousal` parameter directly.
+</Note>
+
+<ParamField path="reason" type="Error">
+  Present if loading failed.
+</ParamField>
+
+---
+
+## TextLoaderListener
+
+Callbacks that fire as lyrics content is loaded.
+
+### onLyricsLoad
+
+```typescript
+onLyricsLoad?(lyrics: LyricsInfo, reason?: Error): void
+```
+
+Called when lyrics timing information is loaded. `LyricsInfo` includes the lyrics ID, URL, and Songle processing status.
+
+<ParamField path="lyrics" type="LyricsInfo">
+  Lyrics timing metadata including `id`, `url`, `diff`, `processing`, and `failed` fields.
+</ParamField>
+
+<ParamField path="reason" type="Error">
+  Present if loading failed.
+</ParamField>
+
+---
+
+### onTextLoad
+
+```typescript
+onTextLoad?(lyricsBody: LyricsBody, reason?: Error): void
+```
+
+Called when the lyrics text content is loaded. `LyricsBody` contains the plain text and optional song/artist metadata.
+
+<ParamField path="lyricsBody" type="LyricsBody">
+  Lyrics text content with optional `artist.name`, `artist.url`, `name`, and `url` fields.
+</ParamField>
+
+<ParamField path="reason" type="Error">
+  Present if loading failed.
+</ParamField>
+
+---
+
+## FontLoaderListener
+
+### onFontsLoad
+
+```typescript
+onFontsLoad?(fonts: FontInfo[], reason?: FontLoadingError): void
+```
+
+Called when font loading completes. If some fonts failed to load, `reason` contains the error with a `fonts` array listing the failed entries.
+
+<ParamField path="fonts" type="FontInfo[]">
+  The list of successfully loaded fonts.
+</ParamField>
+
+<ParamField path="reason" type="FontLoadingError">
+  Present only if one or more fonts failed to load. The `reason.fonts` array lists the fonts that could not be loaded.
+</ParamField>
+
+---
+
+## Complete listener example
+
+```typescript
+import {
+  Player,
+  PlayerListener,
+  IPlayerApp,
+  IVideo,
+  Timer,
+  ParameterValue,
+  FontInfo,
+} from "textalive-app-api";
+
+const player = new Player({
+  app: {
+    token: "your-developer-token",
+    parameters: [
+      { name: "speed", title: "Animation speed", className: "Slider", params: [0.5, 3], initialValue: 1 },
+    ],
+  },
+  vocalAmplitudeEnabled: true,
+});
+
+const listener: PlayerListener = {
+  // --- App lifecycle ---
+
+  onAppLoad(app: IPlayerApp, error?: string) {
+    if (error) {
+      console.error("App API server error:", error);
+    } else {
+      console.log("App API server connected. Version:", app.server.version);
+    }
+  },
+
+  onAppReady(app: IPlayerApp) {
+    if (!app.managed) {
+      // Standalone mode — no TextAlive host connected
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028", {
+        video: { beatId: 3953, chordId: 2727, repetitiveSegmentId: 2946 },
+      });
+    }
+  },
+
+  onAppParameterUpdate(name: string, value: ParameterValue) {
+    console.log(`Parameter "${name}" updated to:`, value);
+  },
+
+  onAppMediaChange(songUrl: string) {
+    console.log("Host requested new song:", songUrl);
+  },
+
+  // --- Video loading ---
+
+  onVideoReady(video: IVideo) {
+    console.log(
+      `Video ready: ${video.phraseCount} phrases, ${video.charCount} chars`
+    );
+  },
+
+  onTimerReady(timer: Timer) {
+    console.log("Timer ready — you can now call requestPlay()");
+    player.requestPlay();
+  },
+
+  // --- Fonts ---
+
+  onFontsLoad(fonts: FontInfo[], error?) {
+    if (error) {
+      console.warn("Some fonts failed:", error.fonts);
+    } else {
+      console.log("Fonts loaded:", fonts.map((f) => f.en));
+    }
+  },
+
+  // --- Playback ---
+
+  onPlay() { console.log("Playing"); },
+  onPause() { console.log("Paused"); },
+  onStop() { console.log("Stopped"); },
+
+  // --- Per-frame animation ---
+
+  onTimeUpdate(position: number) {
+    const beat = player.findBeat(position);
+    const chorus = player.findChorus(position);
+    const amplitude = player.getVocalAmplitude(position);
+
+    // Update your canvas or DOM here
+    render({ position, beat, chorus, amplitude });
+  },
+
+  // --- Seeking ---
+
+  onVideoSeekStart() {
+    console.log("Seek started");
+  },
+
+  onVideoSeek(position: number) {
+    // Update a seekbar preview without triggering full render
+    updateSeekbarPreview(position);
+  },
+
+  onVideoSeekEnd() {
+    console.log("Seek ended");
+  },
+
+  onDispose() {
+    console.log("Player disposed — cleaning up");
+  },
+};
+
+player.addListener(listener);
+```

@@ -1,0 +1,204 @@
+---
+title: "Timer"
+description: "The Timer interface decouples the Player from any specific audio backend. Implement it to integrate a custom audio source."
+---
+
+The `Timer` interface defines the contract between the `Player` and an audio backend. The `Player` calls `Timer` methods to control playback and reads `position` to drive time-synchronized rendering. You can pass any `Timer` implementation to `PlayerOptions.timer` when constructing a `Player`.
+
+## Default timer behavior
+
+When you do not specify a `timer` in `PlayerOptions`, the `Player` selects a timer automatically:
+
+- If `songle-api` is available, a `SongleTimer`-based timer is used (audio playback via Songle).
+- Otherwise, a basic HTML5 audio timer is used.
+
+## Timer interface
+
+### Properties
+
+<ResponseField name="isPlaying" type="boolean">
+  Read-only. `true` while the audio source is actively playing.
+</ResponseField>
+
+<ResponseField name="position" type="number">
+  Read-only. The current playback position in milliseconds. Timer implementations must calculate this value in real time. This is the most precise position value available — more accurate than `IPlayer.mediaPosition` or `IPlayer.videoPosition`.
+</ResponseField>
+
+<ResponseField name="wait" type="number">
+  Get or set the interval between position updates in milliseconds.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="initialize" type="(options: TimerInitOptions) => Promise<void>">
+  Called once during the video data loading process. Sets up the audio backend and connects it to the `Player`.
+
+  <Expandable title="Parameters">
+    <ParamField path="options" type="TimerInitOptions">
+      Initialization options. See [TimerInitOptions](#timerintoptions) below.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="play" type="() => void">
+  Starts music playback.
+</ResponseField>
+
+<ResponseField name="pause" type="() => void">
+  Pauses music playback.
+</ResponseField>
+
+<ResponseField name="stop" type="() => void">
+  Stops music playback — pauses and seeks back to the beginning.
+</ResponseField>
+
+<ResponseField name="seek" type="(position: number) => void">
+  Seeks to the specified position in milliseconds.
+
+  <Expandable title="Parameters">
+    <ParamField path="position" type="number">
+      Target position in milliseconds.
+    </ParamField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="dispose" type="() => void">
+  Releases resources held by this `Timer` instance.
+</ResponseField>
+
+## TimerInitOptions
+
+Passed to `Timer.initialize` when a song is loaded.
+
+<ResponseField name="player" type="IPlayer">
+  The `Player` instance that owns this timer.
+</ResponseField>
+
+<ResponseField name="updater" type="PlayerMediaPositionUpdateFunction">
+  A callback the timer calls periodically to update the player's media position. The function receives the current position (ms) and returns a `Promise<number>` resolving to the accepted position.
+</ResponseField>
+
+<ResponseField name="emitter" type="PlayerEventListener">
+  An event emitter the timer uses to trigger `onTimeUpdate` and related player events.
+</ResponseField>
+
+## PlayerMediaPositionUpdateFunction
+
+```typescript
+type PlayerMediaPositionUpdateFunction = (position: number) => Promise<number>;
+```
+
+A callback used by `Timer` implementations to report the current playback position to the `Player`. The `Player` may adjust the position and resolves the promise with the accepted value.
+
+## BasicTimer
+
+`BasicTimer` is the built-in `Timer` implementation included in the SDK. It advances a clock without embedding any audio element, so no sound is played.
+
+<Note>
+`BasicTimer` is ideal for development and debugging. You can verify that lyrics and animations advance correctly without needing an audio source or network access.
+</Note>
+
+### Constructor
+
+```typescript
+new BasicTimer()
+```
+
+`BasicTimer` requires no constructor arguments and implements the full `Timer` interface.
+
+### Usage
+
+```typescript
+import { Player, BasicTimer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  timer: new BasicTimer()
+});
+// No audio will play, but lyrics will advance with simulated time
+```
+
+<Tip>
+If you need to integrate a non-standard audio backend — such as the Web Audio API, a streaming source, or a native audio player — implement the `Timer` interface and pass your instance to `PlayerOptions.timer`. Your implementation must update `position` in real time and call `updater` periodically with the current position.
+</Tip>
+
+---
+
+## SongleTimer
+
+`SongleTimer` is the full-featured timer implementation that embeds a Songle audio player. It is the **default timer** used when you do not pass `timer` in `PlayerOptions`.
+
+`SongleTimer` relies on the optional peer dependency `songle-api`. If not installed, the timer loads it automatically via dynamic `import()` or `<script>` tag injection.
+
+```typescript
+import { Player, SongleTimer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  timer: new SongleTimer(),
+  mediaElement: document.querySelector("#media"),
+});
+```
+
+### Constructor
+
+```typescript
+new SongleTimer(options?: SongleTimerOptions)
+```
+
+### Properties
+
+<ResponseField name="isPlaying" type="boolean">
+  Read-only. `true` while Songle audio is actively playing.
+</ResponseField>
+
+<ResponseField name="position" type="number">
+  Read-only. Current playback position in milliseconds, calculated in real time.
+</ResponseField>
+
+<ResponseField name="wait" type="number">
+  Get or set the update interval in milliseconds.
+</ResponseField>
+
+<ResponseField name="songlePlayer" type="SonglePlayer">
+  Read-only. The underlying Songle Player instance. Accessible after `onTimerReady` fires. Use this for Songle-specific APIs.
+</ResponseField>
+
+<ResponseField name="withSync" type="boolean">
+  Read-only. `true` if Songle Sync is enabled (i.e., `accessToken` and `secretToken` were provided in `SongleTimerOptions`).
+</ResponseField>
+
+## SongleTimerOptions
+
+Options for instantiating a `SongleTimer`.
+
+<ParamField path="headless" type="boolean">
+  When `true`, the timer operates without embedding an audio element — no sound plays. Useful for server-side or test environments.
+</ParamField>
+
+<ParamField path="accessToken" type="string">
+  Songle Sync access token. Enables real-time multi-client playback synchronization via [Songle Sync](https://api.songle.jp/sync).
+</ParamField>
+
+<ParamField path="secretToken" type="string">
+  Songle Sync secret token. Required alongside `accessToken` for Songle Sync.
+</ParamField>
+
+<ParamField path="songle" type="Songle">
+  A pre-initialized Songle API instance (the object returned by `import Songle from "songle-api"`). When not provided, the timer initializes Songle automatically.
+</ParamField>
+
+### Songle Sync example
+
+```typescript
+import { Player, SongleTimer } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  timer: new SongleTimer({
+    accessToken: "your-songle-sync-access-token",
+    secretToken: "your-songle-sync-secret-token",
+  }),
+  mediaElement: document.querySelector("#media"),
+});
+```

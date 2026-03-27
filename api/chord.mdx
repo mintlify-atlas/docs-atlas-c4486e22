@@ -1,0 +1,193 @@
+---
+title: "Chord (IChord)"
+description: "Represents a chord progression segment in the song, with name, timing, and progress helpers."
+---
+
+`IChord` extends `TimedObject` and represents a single chord (e.g., `C`, `Am`, `G7`) and the time span over which it sounds in the song. Chord data comes from Songle's harmonic analysis and is available after `onVideoReady` via `player.data.songMap.chords` or the `player.getChords()` helper.
+
+Use `IChord` to build chord display overlays, reactive backgrounds, or any visual that should respond to harmonic changes in the music.
+
+## IChord properties
+
+### TimedObject base
+
+<ResponseField name="startTime" type="number">
+  When this chord starts, in milliseconds.
+</ResponseField>
+
+<ResponseField name="endTime" type="number">
+  When this chord ends, in milliseconds.
+</ResponseField>
+
+### Chord-specific
+
+<ResponseField name="duration" type="number">
+  Duration of this chord in milliseconds (`endTime - startTime`). Read-only.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The chord name string as identified by Songle's harmonic analysis, e.g. `"C"`, `"Am"`, `"G7"`, `"Bm7b5"`.
+</ResponseField>
+
+<ResponseField name="index" type="number">
+  Zero-indexed position of this chord in the full chord sequence for the song.
+</ResponseField>
+
+<ResponseField name="previous" type="IChord">
+  The chord immediately before this one. `null` for the first chord.
+</ResponseField>
+
+<ResponseField name="next" type="IChord">
+  The chord immediately after this one. `null` for the last chord.
+</ResponseField>
+
+### Methods
+
+<ResponseField name="progress(time)" type="number">
+  Maps the given playback position `time` (in ms) to a `[0, 1]` value representing how far through this chord the song currently is.
+
+  - `0.0` — at the very start of this chord
+  - `1.0` — at the end of this chord
+
+  <ParamField query="time" type="number" required>
+    Current playback position in milliseconds.
+  </ParamField>
+</ResponseField>
+
+## Player query methods
+
+### getChords
+
+```typescript
+player.getChords(): IChord[]
+```
+
+Returns the full array of chords for the current song, sorted by `startTime`. Returns an empty array if no song map is loaded.
+
+### findChord
+
+```typescript
+player.findChord(time: number, options?: PlayerFindOptions): IChord
+```
+
+Finds the chord that contains (or is nearest to) the given `time` in milliseconds. Returns `null` if not found.
+
+<ParamField query="time" type="number" required>
+  Playback position in milliseconds.
+</ParamField>
+
+<ParamField query="options" type="PlayerFindOptions">
+  Optional search parameters. `PlayerFindOptions` is an alias for `FindTimedObjectOptions`:
+
+  ```typescript
+  type PlayerFindOptions =
+    | { endTime?: number }   // find chord overlapping a range
+    | { loose?: boolean };   // always return the nearest binary search result
+  ```
+</ParamField>
+
+### findChordChange
+
+```typescript
+player.findChordChange(
+  startTime: number,
+  endTime: number
+): TimedObjectsInRange<IChord>
+```
+
+Looks for chord transitions within the given time range. Returns a `TimedObjectsInRange<IChord>` describing which chords were entered, left, or are currently active.
+
+<ParamField query="startTime" type="number" required>
+  Start of the time range in milliseconds.
+</ParamField>
+
+<ParamField query="endTime" type="number" required>
+  End of the time range in milliseconds.
+</ParamField>
+
+## Example: displaying the current chord
+
+Update a label to show the current chord name as the song plays:
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-token" },
+});
+
+const chordLabel = document.getElementById("chord-label")!;
+
+player.addListener({
+  onVideoReady() {
+    console.log("Chords loaded:", player.getChords().length);
+  },
+
+  onTimeUpdate(position: number) {
+    const chordChange = player.findChordChange(
+      player.videoPosition,
+      position
+    );
+
+    if (chordChange.current) {
+      chordLabel.textContent = chordChange.current.name;
+    }
+  },
+});
+```
+
+## Example: changing background color based on chord
+
+Map chord names to colors and animate a background transition:
+
+```typescript
+const chordColors: Record<string, string> = {
+  C:  "#e8f4f8",
+  Am: "#f8e8e8",
+  F:  "#e8f8e8",
+  G:  "#f8f4e8",
+  // Add more chords as needed
+};
+
+player.addListener({
+  onTimeUpdate(position: number) {
+    const chordChange = player.findChordChange(
+      player.videoPosition,
+      position
+    );
+
+    for (const chord of chordChange.entered) {
+      const color = chordColors[chord.name] ?? "#f0f0f0";
+
+      // Smoothly transition to the new chord's color
+      document.body.style.transition = "background-color 0.3s ease";
+      document.body.style.backgroundColor = color;
+
+      console.log(
+        `Chord changed to ${chord.name} at ${chord.startTime}ms` +
+        ` (duration: ${chord.duration}ms)`
+      );
+    }
+  },
+});
+```
+
+<Tip>
+  Use `chordChange.entered` rather than checking `chordChange.current` every frame to avoid redundant work — `entered` only contains chords that began within the current time interval.
+</Tip>
+
+## Iterating all chords
+
+You can also walk the linked list via `previous` / `next` rather than using the array:
+
+```typescript
+player.addListener({
+  onVideoReady() {
+    let chord = player.getChords()[0];
+    while (chord) {
+      console.log(`${chord.startTime}ms – ${chord.endTime}ms : ${chord.name}`);
+      chord = chord.next;
+    }
+  },
+});
+```

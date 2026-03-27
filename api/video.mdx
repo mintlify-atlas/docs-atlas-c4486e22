@@ -1,0 +1,407 @@
+---
+title: 'Video (IVideo)'
+description: 'The top-level container for all lyrics and rendering units. Access it via player.video after a song loads.'
+keywords: ['IVideo', 'video', 'phrases', 'words', 'chars', 'lyrics', 'rendering unit']
+---
+
+`IVideo` is the root container for all timed rendering units in a TextAlive song — phrases, words, and characters. You access it through `player.video` after the `onVideoReady` event fires.
+
+```typescript
+player.addListener({
+  onVideoReady(v: IVideo) {
+    console.log(v.phraseCount, 'phrases');
+    console.log(v.wordCount, 'words');
+    console.log(v.charCount, 'chars');
+  }
+});
+```
+
+## Interface definition
+
+```typescript
+export declare interface IVideo extends TimedObject {
+  readonly phrases: IPhrase[];
+  readonly words: IWord[];
+  readonly chars: IChar[];
+
+  duration: number;
+  readonly startTime: number;
+  readonly endTime: number;
+
+  readonly phraseCount: number;
+  readonly wordCount: number;
+  readonly charCount: number;
+
+  readonly firstPhrase: IPhrase;
+  readonly lastPhrase: IPhrase;
+  readonly firstWord: IWord;
+  readonly lastWord: IWord;
+  readonly firstChar: IChar;
+  readonly lastChar: IChar;
+
+  progress(time: number): number;
+
+  getPhrase(index: number): IPhrase;
+  getWord(index: number): IWord;
+  getChar(index: number): IChar;
+
+  findIndex(unit: IRenderingUnit): number;
+
+  findPhrase(time: number, options?: FindTimedObjectOptions): IPhrase;
+  findPhraseChange(startTime: number, endTime: number): TimedObjectsInRange<IPhrase>;
+  findWord(time: number, options?: FindTimedObjectOptions): IWord;
+  findWordChange(startTime: number, endTime: number): TimedObjectsInRange<IWord>;
+  findChar(time: number, options?: FindTimedObjectOptions): IChar;
+  findCharChange(startTime: number, endTime: number): TimedObjectsInRange<IChar>;
+}
+```
+
+## Properties
+
+### Collections
+
+<ResponseField name="phrases" type="IPhrase[]">
+  All phrases in the video, in chronological order.
+</ResponseField>
+
+<ResponseField name="words" type="IWord[]">
+  All words across all phrases, in chronological order.
+</ResponseField>
+
+<ResponseField name="chars" type="IChar[]">
+  All characters across all words, in chronological order.
+</ResponseField>
+
+### Timing
+
+<ResponseField name="startTime" type="number" required>
+  The start time of the video in milliseconds. Read-only.
+</ResponseField>
+
+<ResponseField name="endTime" type="number" required>
+  The end time of the video in milliseconds. Read-only.
+</ResponseField>
+
+<ResponseField name="duration" type="number" required>
+  The total duration of the video in milliseconds. This property is **read/write** — you can set it to override the computed value.
+</ResponseField>
+
+### Counts
+
+<ResponseField name="phraseCount" type="number">
+  Total number of phrases in the video.
+</ResponseField>
+
+<ResponseField name="wordCount" type="number">
+  Total number of words across all phrases.
+</ResponseField>
+
+<ResponseField name="charCount" type="number">
+  Total number of characters across all words.
+</ResponseField>
+
+### Boundary accessors
+
+<ResponseField name="firstPhrase" type="IPhrase">
+  The first phrase in the video.
+</ResponseField>
+
+<ResponseField name="lastPhrase" type="IPhrase">
+  The last phrase in the video.
+</ResponseField>
+
+<ResponseField name="firstWord" type="IWord">
+  The first word in the video.
+</ResponseField>
+
+<ResponseField name="lastWord" type="IWord">
+  The last word in the video.
+</ResponseField>
+
+<ResponseField name="firstChar" type="IChar">
+  The first character in the video.
+</ResponseField>
+
+<ResponseField name="lastChar" type="IChar">
+  The last character in the video.
+</ResponseField>
+
+## Methods
+
+### progress
+
+Maps a song position to a normalized value in `[0, 1]` representing how far through the entire video playback has progressed.
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+**Returns** `number` — a value in `[0, 1]`.
+
+### getPhrase
+
+Returns the phrase at the given index.
+
+<ParamField path="index" type="number" required>
+  Zero-based phrase index.
+</ParamField>
+
+**Returns** `IPhrase`
+
+### getWord
+
+Returns the word at the given index.
+
+<ParamField path="index" type="number" required>
+  Zero-based word index.
+</ParamField>
+
+**Returns** `IWord`
+
+### getChar
+
+Returns the character at the given index.
+
+<ParamField path="index" type="number" required>
+  Zero-based character index.
+</ParamField>
+
+**Returns** `IChar`
+
+### findIndex
+
+Returns the index of a given rendering unit within the video's flat unit list.
+
+<ParamField path="unit" type="IRenderingUnit" required>
+  The rendering unit whose index you want.
+</ParamField>
+
+**Returns** `number`
+
+### findPhrase
+
+Finds the phrase active at the given time.
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+<ParamField path="options" type="FindTimedObjectOptions">
+  Optional search options. See [FindTimedObjectOptions](#findtimedobjectoptions).
+</ParamField>
+
+**Returns** `IPhrase | null`
+
+### findPhraseChange
+
+Looks for phrase transitions in the given time range. Useful for detecting when a phrase starts or ends.
+
+<ParamField path="startTime" type="number" required>
+  Start of the time range [ms].
+</ParamField>
+
+<ParamField path="endTime" type="number" required>
+  End of the time range [ms].
+</ParamField>
+
+**Returns** `TimedObjectsInRange<IPhrase>` — see [TimedObjectsInRange](#timedobjectsinrange).
+
+### findWord
+
+Finds the word active at the given time.
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+<ParamField path="options" type="FindTimedObjectOptions">
+  Optional search options.
+</ParamField>
+
+**Returns** `IWord | null`
+
+### findWordChange
+
+Looks for word transitions in the given time range.
+
+<ParamField path="startTime" type="number" required>
+  Start of the time range [ms].
+</ParamField>
+
+<ParamField path="endTime" type="number" required>
+  End of the time range [ms].
+</ParamField>
+
+**Returns** `TimedObjectsInRange<IWord>`
+
+### findChar
+
+Finds the character active at the given time.
+
+<ParamField path="time" type="number" required>
+  Position in the song [ms].
+</ParamField>
+
+<ParamField path="options" type="FindTimedObjectOptions">
+  Optional search options.
+</ParamField>
+
+**Returns** `IChar | null`
+
+### findCharChange
+
+Looks for character transitions in the given time range.
+
+<ParamField path="startTime" type="number" required>
+  Start of the time range [ms].
+</ParamField>
+
+<ParamField path="endTime" type="number" required>
+  End of the time range [ms].
+</ParamField>
+
+**Returns** `TimedObjectsInRange<IChar>`
+
+---
+
+## Supporting types
+
+### TimedObjectsInRange
+
+Returned by the `find*Change` methods. Describes which units entered and left during a time window — ideal for driving enter/exit animations without polling.
+
+```typescript
+export declare interface TimedObjectsInRange<T extends TimedObject> {
+  /** The unit active at the end of the time range, or null. */
+  current: T | null;
+  /** Units whose startTime falls within [startTime, endTime]. */
+  entered: T[];
+  /** Units whose endTime falls within [startTime, endTime]. */
+  left: T[];
+  /** The last unit before the time range, or null. */
+  previous: T | null;
+  /** The first unit after the time range, or null. */
+  next: T | null;
+}
+```
+
+<Note>
+  `entered` and `left` are arrays because multiple short units can start or end within a single render frame.
+</Note>
+
+### FindTimedObjectOptions
+
+```typescript
+export declare type FindTimedObjectOptions =
+  | { endTime?: number }   // find a unit overlapping the [time, endTime] range
+  | { loose?: boolean };   // always return the nearest unit even if it does not contain `time`
+```
+
+- Pass `{ endTime }` to match any unit that overlaps a time **range** rather than a single instant.
+- Pass `{ loose: true }` to return the nearest unit even when no unit covers the requested time.
+
+---
+
+## IRenderingUnit — base interface
+
+All lyrics units (`IPhrase`, `IWord`, `IChar`) extend `IRenderingUnit`.
+
+```typescript
+export declare interface IRenderingUnit extends TimedObject {
+  readonly parent: IRenderingUnit;
+  readonly children: IRenderingUnit[];
+  readonly previous: IRenderingUnit;
+  readonly next: IRenderingUnit;
+  readonly duration: number;
+  animate: RenderingUnitFunction;
+  progress(time: number): number;
+  getType(): number;
+  toString(): string;
+}
+
+export declare type RenderingUnitFunction = (
+  now: number,
+  u: IRenderingUnit
+) => void;
+```
+
+<ResponseField name="parent" type="IRenderingUnit">
+  The parent rendering unit. `null` for phrases (they have no parent).
+</ResponseField>
+
+<ResponseField name="children" type="IRenderingUnit[]">
+  Child rendering units. For phrases this is an array of `IWord`; for words, `IChar[]`; for chars, `[]`.
+</ResponseField>
+
+<ResponseField name="previous" type="IRenderingUnit">
+  The preceding unit of the same type.
+</ResponseField>
+
+<ResponseField name="next" type="IRenderingUnit">
+  The following unit of the same type.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  Duration of this unit in milliseconds (`endTime - startTime`).
+</ResponseField>
+
+<ResponseField name="animate" type="RenderingUnitFunction">
+  When set, TextAlive calls this function on every render frame instead of the default template animation. Signature: `(now: number, u: IRenderingUnit) => void`.
+</ResponseField>
+
+### UnitTypes
+
+`getType()` returns one of the constants in `UnitTypes`:
+
+```typescript
+export declare const UnitTypes: {
+  NONE: number;    // 0
+  PHRASE: number;  // 1
+  WORD: number;    // 2
+  CHAR: number;    // 3
+  GRAPHIC: number; // 4
+  ALL: number;
+  PUBLIC: number;
+};
+```
+
+---
+
+## Example: full onTimeUpdate handler
+
+This pattern handles both continuous per-character progress and discrete enter/leave transitions:
+
+```typescript
+let lastPosition = 0;
+
+player.addListener({
+  onTimeUpdate(position: number) {
+    const video = player.video;
+
+    // Continuous: get the character currently being sung
+    const currentChar = video.findChar(position);
+    if (currentChar) {
+      const p = currentChar.progress(position); // 0 → 1 within this char
+      renderChar(currentChar.text, p);
+    }
+
+    // Discrete: detect characters that entered or left since the last frame
+    const charChange = video.findCharChange(lastPosition, position);
+
+    for (const char of charChange.entered) {
+      onCharEnter(char);
+    }
+    for (const char of charChange.left) {
+      onCharLeave(char);
+    }
+
+    lastPosition = position;
+  }
+});
+
+function renderChar(text: string, progress: number) {
+  // Use progress to drive opacity, scale, colour, etc.
+}
+function onCharEnter(char: IChar) { /* start enter animation */ }
+function onCharLeave(char: IChar) { /* start exit animation */ }
+```

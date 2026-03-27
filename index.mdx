@@ -1,97 +1,71 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "TextAlive App API"
+description: "Build lyric apps — web applications that display song lyrics synchronized with music playback."
 ---
 
-## Setting up
+TextAlive App API is a JavaScript/TypeScript SDK for creating **lyric apps**: interactive web experiences where lyrics animate in sync with music. It connects to the [TextAlive](https://textalive.jp) platform to retrieve beat timings, chord progressions, chorus segments, and per-character lyric timing — so your app stays perfectly in sync with any registered song.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first lyric app in minutes with a working code example
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Installation" icon="box" href="/installation">
+    Add TextAlive App API via npm or CDN script tag
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Core Concepts" icon="book" href="/concepts/player">
+    Understand the Player, song map, lyrics units, and timers
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/player">
+    Full reference for every class, interface, and utility
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## How it works
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Get an app token">
+    Register at [TextAlive for Developers](https://developer.textalive.jp) to obtain an application token. This token identifies your app to the TextAlive platform.
+  </Step>
+  <Step title="Install the SDK">
+    Add the package via npm or load it from a CDN script tag — no build tools required for quick prototyping.
+    ```bash
+    npm install textalive-app-api
+    ```
+  </Step>
+  <Step title="Initialize the Player">
+    Create a `Player` instance with your token and register event listeners to react to song loading and playback events.
+    ```typescript
+    import { Player } from "textalive-app-api";
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+    const player = new Player({
+      app: { token: "your-app-token" }
+    });
+    ```
+  </Step>
+  <Step title="Animate lyrics in sync">
+    Use `onTimeUpdate` to query the current phrase, word, or character at any playback position, and drive your animations from there.
+  </Step>
+</Steps>
 
-## Need inspiration?
+## Key features
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Beat & chord sync" icon="music">
+    Query beats, chords, and chorus segments at any playback position using Songle's music analysis
+  </Card>
+  <Card title="Hierarchical lyrics" icon="list">
+    Navigate lyrics as phrases, words, and characters — each with precise start/end timings
+  </Card>
+  <Card title="Custom timers" icon="clock">
+    Plug in any audio backend — SongleWidget, HTML5 audio, or your own — via the Timer interface
+  </Card>
+  <Card title="TextAlive host integration" icon="link">
+    Embed your app inside the TextAlive platform to receive song changes and parameter updates from the host
+  </Card>
+  <Card title="Animation utilities" icon="wand-magic-sparkles">
+    Built-in easing functions, 2D matrix math, and color helpers for smooth lyric animations
+  </Card>
+  <Card title="Font loading" icon="font">
+    Load Google Fonts and Morisawa TypeSquare fonts on demand for styled lyric rendering
+  </Card>
+</CardGroup>

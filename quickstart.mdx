@@ -1,80 +1,225 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick start"
+description: "Build a working lyric app that displays synchronized lyrics in under 5 minutes."
 ---
 
-## Get started in three steps
+<Steps>
 
-Get your documentation site running locally and make your first customization.
+  <Step title="Get an app token">
+    Register your application at [developer.textalive.jp](https://developer.textalive.jp) to obtain an app token. The token authenticates your app with the TextAlive API server and is required to load songs and lyrics data.
+  </Step>
 
-### Step 1: Set up your local environment
+  <Step title="Install the package">
+    <Tabs>
+      <Tab title="npm">
+        Install the `textalive-app-api` package:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+        ```bash
+        npm install textalive-app-api
+        ```
 
-### Step 2: Deploy your changes
+        Then import `Player` in your source file:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+        ```typescript
+        import { Player } from "textalive-app-api";
+        ```
+      </Tab>
+      <Tab title="CDN">
+        Add these two `<script>` tags to your HTML. `axios` must be loaded first because the API depends on it:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+        ```html
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <script src="https://unpkg.com/textalive-app-api/dist/index.js"></script>
+        ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+        After both scripts load, the global `TextAliveApp` object is available:
 
-### Step 3: Go live
+        ```javascript
+        const { Player } = TextAliveApp;
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Create a Player and attach listeners">
+    Instantiate a `Player` with your app token, then call `addListener` to register event callbacks. The two most important events for a lyric app are `onVideoReady` (lyrics data is loaded and ready) and `onTimerReady` (the audio timer is ready, meaning you can call `requestPlay`).
 
-## Next steps
+    ```typescript
+    import { Player, IVideo, Timer, IChar } from "textalive-app-api";
 
-Now that you have your docs running, explore these key features:
+    // Create the player. Point mediaElement at a container div for the audio widget.
+    const player = new Player({
+      app: { token: "your_app_token_here" },
+      mediaElement: document.querySelector("#media"),
+    });
 
-<CardGroup cols={2}>
+    // Track the current lyric character so we can render it.
+    let currentChar: IChar | null = null;
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+    player.addListener({
+      // Called once song metadata and lyrics timing data are loaded.
+      onVideoReady(v: IVideo) {
+        console.log("Video ready:", v.charCount, "characters");
+      },
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+      // Called when the audio timer is initialised — safe to call requestPlay() after this.
+      onTimerReady(timer: Timer) {
+        console.log("Timer ready");
+      },
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+      // Called when playback starts.
+      onPlay() {
+        console.log("Playback started");
+      },
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+      // Called on every animation frame while the song is playing.
+      // position is the current playback position in milliseconds.
+      onTimeUpdate(position: number) {
+        // findChar returns the IChar being vocalized at this position,
+        // or null if nothing is being sung right now.
+        currentChar = player.video.findChar(position);
 
-</CardGroup>
+        if (currentChar) {
+          // Render the character — update a DOM element, canvas, etc.
+          document.querySelector("#lyric").textContent = currentChar.text;
+        } else {
+          document.querySelector("#lyric").textContent = "";
+        }
+      },
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+      onPause() {
+        console.log("Playback paused");
+      },
+
+      onStop() {
+        console.log("Playback stopped");
+      },
+    });
+    ```
+
+    <Note>
+      `addListener` accepts any object that implements some or all of the `PlayerListener` interface. All callback properties are optional — only define the ones you need.
+    </Note>
+  </Step>
+
+  <Step title="Load a song and control playback">
+    Call `createFromSongUrl` with a TextAlive song URL to begin loading the song's map and lyrics data. Once `onTimerReady` fires, you can start, pause, and stop playback.
+
+    ```typescript
+    // Load a song. This returns a Promise<IVideo> that resolves after
+    // the video object is constructed (same point onVideoReady fires).
+    await player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+
+    // Wire up playback controls.
+    document.querySelector("#play").addEventListener("click", () => {
+      player.requestPlay();
+    });
+
+    document.querySelector("#pause").addEventListener("click", () => {
+      player.requestPause();
+    });
+
+    document.querySelector("#stop").addEventListener("click", () => {
+      // requestStop pauses and seeks back to the beginning.
+      player.requestStop();
+    });
+    ```
+
+    <Tip>
+      Check `player.app.managed` at startup. When your app is embedded in a TextAlive host (such as the TextAlive editor), the host controls song selection. In that case you do not need to call `createFromSongUrl` — the host sends an `onAppMediaChange` event when it wants your app to load a different song.
+    </Tip>
+  </Step>
+
+</Steps>
+
+## Complete example
+
+Below is a self-contained HTML file using the CDN build. It shows character-by-character lyric display in action.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TextAlive lyric app</title>
+    <style>
+      body { font-family: sans-serif; text-align: center; padding: 2rem; }
+      #lyric { font-size: 4rem; min-height: 5rem; }
+      #media { margin: 1rem auto; }
+      button { margin: 0.25rem; padding: 0.5rem 1rem; font-size: 1rem; }
+    </style>
+  </head>
+  <body>
+    <div id="lyric"></div>
+    <div id="media"></div>
+    <div>
+      <button id="play">Play</button>
+      <button id="pause">Pause</button>
+      <button id="stop">Stop</button>
+    </div>
+
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/textalive-app-api/dist/index.js"></script>
+    <script>
+      const { Player } = TextAliveApp;
+
+      const lyricEl = document.querySelector("#lyric");
+      const playBtn = document.querySelector("#play");
+      const pauseBtn = document.querySelector("#pause");
+      const stopBtn = document.querySelector("#stop");
+
+      // Disable controls until the timer is ready.
+      playBtn.disabled = true;
+      pauseBtn.disabled = true;
+      stopBtn.disabled = true;
+
+      const player = new Player({
+        app: { token: "your_app_token_here" },
+        mediaElement: document.querySelector("#media"),
+      });
+
+      player.addListener({
+        onVideoReady(v) {
+          console.log("Video ready —", v.charCount, "characters");
+        },
+
+        onTimerReady(timer) {
+          // Enable controls once audio is ready.
+          playBtn.disabled = false;
+          pauseBtn.disabled = false;
+          stopBtn.disabled = false;
+        },
+
+        onPlay() {
+          playBtn.disabled = true;
+          pauseBtn.disabled = false;
+        },
+
+        onPause() {
+          playBtn.disabled = false;
+          pauseBtn.disabled = true;
+        },
+
+        onStop() {
+          playBtn.disabled = false;
+          pauseBtn.disabled = true;
+          lyricEl.textContent = "";
+        },
+
+        onTimeUpdate(position) {
+          // position is in milliseconds.
+          const char = player.video.findChar(position);
+          lyricEl.textContent = char ? char.text : "";
+        },
+      });
+
+      // Load the song.
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+
+      playBtn.addEventListener("click", () => player.requestPlay());
+      pauseBtn.addEventListener("click", () => player.requestPause());
+      stopBtn.addEventListener("click", () => player.requestStop());
+    </script>
+  </body>
+</html>
+```

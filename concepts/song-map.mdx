@@ -1,0 +1,259 @@
+---
+title: "Song map"
+description: "The ISongMap interface exposes the structured musical analysis of a song provided by Songle: beats, chord progressions, and repetitive (chorus) segments."
+---
+
+## What is the song map?
+
+When you call any of the `createFrom…` methods on `Player`, the API fetches a
+**song map** for the requested track from [Songle](https://songle.jp). The song
+map is a machine-generated musical analysis that includes:
+
+- **Beats** — the rhythmic grid of the song
+- **Chords** — a chord-progression timeline
+- **Repetitive segments** — automatically detected repeated sections such as choruses
+
+You access the raw data through `player.data.songMap` (type `ISongMap`) or,
+more commonly, through the query helpers directly on the `Player` instance.
+
+```typescript
+player.addListener({
+  onSongMapLoad(songMap) {
+    console.log("beats:", songMap.beats.length);
+    console.log("chords:", songMap.chords.length);
+    console.log("repetitive segment groups:", songMap.segments.length);
+  },
+});
+```
+
+## ISongMap
+
+```typescript
+interface ISongMap {
+  readonly beats: IBeat[];
+  readonly chords: IChord[];
+  readonly segments: IRepetitiveSegments[];
+  revisions: {
+    chordId?: number;
+    beatId?: number;
+    repetitiveSegmentId?: number;
+  };
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `beats` | `IBeat[]` | Sorted array of all beat objects in the song |
+| `chords` | `IChord[]` | Sorted array of all chord objects in the song |
+| `segments` | `IRepetitiveSegments[]` | Groups of repetitive segment data (each group may be a chorus or non-chorus) |
+| `revisions` | `object` | Revision IDs for each analysed layer; use these when pinning a specific Songle analysis |
+
+## Beats
+
+### IBeat
+
+Each entry in `songMap.beats` is an `IBeat`. Beats are sorted by `startTime`
+and linked via `previous` / `next` references.
+
+```typescript
+interface IBeat extends TimedObject {
+  readonly startTime: number;   // beat start [ms]
+  readonly endTime: number;     // beat end [ms] (= next beat start)
+  readonly duration: number;    // endTime - startTime [ms]
+  length: number;               // number of beats in this bar (e.g. 4 for 4/4 time)
+  position: number;             // 0-based index of this beat within its bar
+  index: number;                // 0-based index of this beat in the whole song
+  previous: IBeat;
+  next: IBeat;
+  progress(time: number): number; // maps time → [0, 1] within this beat
+}
+```
+
+- `position` ranges from `0` to `length - 1`. For a 4/4 bar, `position === 0`
+  is the downbeat.
+- `progress(time)` returns `0.0` at `startTime` and `1.0` at `endTime`, useful
+  for smooth per-beat animation.
+
+### Querying beats
+
+```typescript
+// Get every beat in the song
+const beats: IBeat[] = player.getBeats();
+
+// Find the beat at the current playback position
+const beat: IBeat | null = player.findBeat(player.mediaPosition);
+
+// Detect beat changes over a time window (e.g. between two onTimeUpdate calls)
+const changes = player.findBeatChange(previousPosition, position);
+// changes.entered  — beats whose startTime falls in the window
+// changes.left     — beats whose endTime falls in the window
+// changes.current  — beat active at `position`
+```
+
+**Example: pulse on every downbeat**
+
+```typescript
+player.addListener({
+  onTimeUpdate(position) {
+    const beat = player.findBeat(position);
+    if (beat && beat.position === 0) {
+      // This is the first beat of the bar
+      const t = beat.progress(position); // 0 → 1 across the beat
+      myElement.style.transform = `scale(${1 + 0.2 * (1 - t)})`;
+    }
+  },
+});
+```
+
+## Chords
+
+### IChord
+
+Each chord spans the time range `[startTime, endTime]` and carries a human-readable
+chord `name` such as `"Am"` or `"G#maj7"`.
+
+```typescript
+interface IChord extends TimedObject {
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly duration: number;      // endTime - startTime [ms]
+  name: string;                   // chord name (e.g. "Am", "G#maj7")
+  index: number;
+  previous: IChord;
+  next: IChord;
+  progress(time: number): number; // maps time → [0, 1] within this chord
+}
+```
+
+### Querying chords
+
+```typescript
+// Get all chords
+const chords: IChord[] = player.getChords();
+
+// Find the chord sounding at the current position
+const chord: IChord | null = player.findChord(player.mediaPosition);
+console.log(chord?.name); // "Am"
+
+// Detect chord changes in a window
+const changes = player.findChordChange(previousPosition, position);
+```
+
+## Repetitive segments (chorus detection)
+
+### IRepetitiveSegments
+
+The song map groups detected repetitions into `IRepetitiveSegments` objects.
+Each group contains one or more `IRepetitiveSegment` instances that share
+the same musical material.
+
+```typescript
+interface IRepetitiveSegments {
+  chorus: boolean;                     // true when Songle classified this as a chorus
+  duration: number;                    // typical duration of each segment in this group [ms]
+  segments: IRepetitiveSegment[];      // sorted array of occurrences
+}
+
+interface IRepetitiveSegment extends TimedObject {
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly duration: number;
+  index: number;
+  previous: IRepetitiveSegment;
+  next: IRepetitiveSegment;
+  progress(time: number): number;      // maps time → [0, 1] within this segment
+}
+```
+
+### Querying chorus segments
+
+```typescript
+// Get all chorus segments (IRepetitiveSegment[])
+const choruses = player.getChoruses();
+
+// Find the chorus at the current position (or null)
+const chorus = player.findChorus(player.mediaPosition);
+
+if (chorus) {
+  console.log("In chorus:", chorus.progress(player.mediaPosition));
+}
+
+// Detect chorus transitions in a time window
+const changes = player.findChorusChange(previousPosition, position);
+if (changes.entered.length > 0) {
+  console.log("Chorus started!");
+}
+if (changes.left.length > 0) {
+  console.log("Chorus ended.");
+}
+```
+
+## FindTimedObjectOptions
+
+The `findBeat`, `findChord`, and `findChorus` helpers accept an optional
+`FindTimedObjectOptions` argument that changes how the binary search is interpreted.
+
+```typescript
+type FindTimedObjectOptions =
+  | { endTime?: number }   // find an object overlapping [time, endTime]
+  | { loose?: boolean };   // always return nearest result (no strict containment check)
+```
+
+| Option | Behaviour |
+|---|---|
+| `endTime` | Returns the object that overlaps with the range `[time, endTime]` rather than requiring strict containment of `time` |
+| `loose` | Returns the nearest binary-search result even if it does not contain `time` |
+
+```typescript
+// "Does any chorus overlap with this 500 ms window?"
+const chorus = player.findChorus(position, { endTime: position + 500 });
+```
+
+## Vocal amplitude
+
+Vocal amplitude measures how loud the vocal track is at each point in time.
+You must opt in by setting `vocalAmplitudeEnabled: true` in `PlayerOptions`.
+
+```typescript
+const player = new Player({
+  app: { token: "your-token" },
+  vocalAmplitudeEnabled: true,
+});
+
+// After onSongMapLoad fires:
+const max = player.getMaxVocalAmplitude();
+const amp = player.getVocalAmplitude(player.mediaPosition);
+const normalized = amp / max; // 0 → 1
+```
+
+## Valence / Arousal
+
+Valence and arousal are continuous emotion-space coordinates, both normalised
+to `[-1, 1]`. They represent the emotional character of the music at each
+point in time and are comparable across different songs.
+
+You must opt in by setting `valenceArousalEnabled: true`.
+
+```typescript
+const player = new Player({
+  app: { token: "your-token" },
+  valenceArousalEnabled: true,
+});
+
+// After onSongMapLoad fires:
+const va = player.getValenceArousal(player.mediaPosition);
+console.log(va.v, va.a); // valence, arousal each in [-1, 1]
+
+// Median over the whole song (useful as a baseline)
+const median = player.getMedianValenceArousal();
+```
+
+<Tip>
+  Use the median valence/arousal as a reference point. If the current value
+  deviates significantly from the median you can trigger visual changes that
+  reflect emotional peaks or valleys in the song.
+</Tip>
+
+---
+
+Full type references: [/api/beat](/api/beat) · [/api/chord](/api/chord) · [/api/repetitive-segment](/api/repetitive-segment) · [/api/song-map](/api/song-map)

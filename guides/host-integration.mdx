@@ -1,0 +1,262 @@
+---
+title: "TextAlive host integration"
+description: "Understand how your lyric app connects to the TextAlive platform host and how to handle both hosted and standalone modes."
+---
+
+When your lyric app is embedded in the TextAlive platform — for example inside a song page on the website — it runs inside an `<iframe>`. The surrounding page acts as the **host**. The host controls which song plays and can send parameter values to your app in real time.
+
+<Note>
+  Hosted mode only works when your app is served inside an `<iframe>` on the TextAlive platform. During local development your app runs in standalone mode (`app.managed === false`). Register your app at [developer.textalive.jp](https://developer.textalive.jp) to obtain an app token and enable hosted mode in production.
+</Note>
+
+## The IPlayerApp interface
+
+Access app state at any time through `player.app`:
+
+```typescript
+const app: IPlayerApp = player.app;
+```
+
+### Properties
+
+| Property | Type | Description |
+|---|---|---|
+| `managed` | `boolean` | `true` when connected to a TextAlive host, `false` in standalone mode |
+| `host` | `PlayerAppHost` | Host info object (includes `version: string`) — only set when `managed` is `true` |
+| `songUrl` | `string` | Song URL specified by the query parameter or overridden by the host |
+| `parameters` | `ParameterValues` | Current values of all declared parameters (`{ [name: string]: ParameterValue }`) |
+| `isConnecting` | `boolean` | `true` while the app is still attempting to connect to a host |
+| `status` | `number` | Numeric status code for the app's current state |
+| `options` | `PlayerAppOptions` | The options object passed to the `Player` constructor |
+
+### connect()
+
+The player calls `app.connect()` automatically during initialization. It posts a message to the parent frame up to five times, waiting up to 200 ms for an acknowledgement each time — up to 1 second total. You do not normally need to call this yourself.
+
+---
+
+## PlayerAppOptions
+
+Pass `PlayerAppOptions` as the `app` property inside `PlayerOptions` when constructing the player:
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: {
+    token: "your-app-token",   // required
+    parameters: [
+      {
+        name: "speed",
+        title: { ja: "速さ", en: "Speed" },
+        className: "Slider",
+        params: [0, 100],
+        initialValue: 50,
+      },
+    ],
+  },
+  mediaElement: document.querySelector("#media"),
+});
+```
+
+<ParamField path="token" type="string" required>
+  Your application token issued by the TextAlive developer portal. The player uses this to authenticate with the TextAlive API server.
+</ParamField>
+
+<ParamField path="parameters" type="ParameterWidget[]">
+  List of parameters the host can adjust in real time. Each entry describes one adjustable control shown in the host UI.
+</ParamField>
+
+---
+
+## ParameterWidget
+
+Each entry in `parameters` declares one adjustable control:
+
+```typescript
+interface ParameterWidget {
+  name: string;                        // variable name used in onAppParameterUpdate
+  title?: string | RegionalText;       // human-readable label
+  className?: string;                  // widget type, e.g. "Slider"
+  params?: (boolean | number | string | [...] | {...})[];
+  initialValue?: ParameterValue;       // IColor | string | number | boolean
+}
+```
+
+<ParamField path="name" type="string" required>
+  The internal parameter name. This is the value passed as the first argument to `onAppParameterUpdate`.
+</ParamField>
+
+<ParamField path="title" type="string | RegionalText">
+  The label shown to users in the host UI. Use a `RegionalText` object to provide bilingual labels.
+</ParamField>
+
+<ParamField path="className" type="string">
+  The type of widget to render. For example, `"Slider"` renders a range slider. The available widget types depend on the TextAlive platform.
+</ParamField>
+
+<ParamField path="params" type="array">
+  Configuration options for the widget. For a `"Slider"` widget, passing `[0, 100]` sets the minimum and maximum values.
+</ParamField>
+
+<ParamField path="initialValue" type="ParameterValue">
+  The default value before the host sends any update. Type is `IColor | string | number | boolean`.
+</ParamField>
+
+### ParameterValue type
+
+```typescript
+type ParameterValue = IColor | string | number | boolean;
+```
+
+The value you receive in `onAppParameterUpdate` matches the type implied by your widget definition.
+
+### RegionalText
+
+Use `RegionalText` to provide bilingual labels that TextAlive switches based on the user's display language:
+
+```typescript
+type RegionalText = { [lang: string]: string };
+
+// Example
+const title: RegionalText = {
+  ja: "文字の色",
+  en: "Character color",
+};
+```
+
+Currently `"ja"` (Japanese) and `"en"` (English) are supported.
+
+---
+
+## Hosted mode vs standalone mode
+
+Your app must handle both modes gracefully. The canonical pattern is to check `app.managed` inside `onAppReady`:
+
+<Steps>
+  <Step title="Check app.managed in onAppReady">
+    `onAppReady` fires once the app has either connected to a host or determined it is running standalone. At this point `app.managed` is reliable.
+  </Step>
+  <Step title="Load a song manually when standalone">
+    When `app.managed` is `false` (local development, or running outside the platform), call `player.createFromSongUrl()` yourself.
+  </Step>
+  <Step title="Wait for the host to send a song when managed">
+    When `app.managed` is `true`, the host sends the song URL via `onAppMediaChange`. You do not need to call `createFromSongUrl()` — the player handles it.
+  </Step>
+</Steps>
+
+```typescript
+player.addListener({
+  onAppReady(app) {
+    if (!app.managed) {
+      // Standalone: load a default song for development
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+    }
+    // Managed: do nothing — wait for onAppMediaChange
+  },
+
+  onAppMediaChange(songUrl, videoPromise) {
+    // Host changed the song (only fires in managed mode)
+    console.log("Host requested song:", songUrl);
+
+    if (videoPromise) {
+      videoPromise.then((video) => {
+        console.log("New video ready with", video.charCount, "characters");
+      });
+    }
+  },
+
+  onAppParameterUpdate(name, value) {
+    // React to host-driven parameter changes
+    console.log(`Parameter "${name}" updated to`, value);
+
+    if (name === "speed" && typeof value === "number") {
+      applySpeed(value);
+    }
+  },
+});
+```
+
+### Standalone default song URL
+
+You can also specify a fallback song via the `s` query parameter when opening your app in a browser:
+
+```
+http://localhost:3000/?s=https://piapro.jp/t/hZ35/20240130103028
+```
+
+The player reads this automatically on startup, so `onAppReady` may already have `app.songUrl` set even in standalone mode. In that case the player begins loading without you needing to call `createFromSongUrl()` manually.
+
+---
+
+## Full initialization example
+
+The following shows a complete `Player` setup that handles both modes:
+
+```typescript
+import {
+  Player,
+  IPlayerApp,
+  IVideo,
+  ParameterValue,
+} from "textalive-app-api";
+
+const player = new Player({
+  app: {
+    token: "your-app-token",
+    parameters: [
+      {
+        name: "textColor",
+        title: { ja: "文字色", en: "Text color" },
+        className: "Slider",
+        params: [0, 255],
+        initialValue: 255,
+      },
+    ],
+  },
+  mediaElement: document.querySelector<HTMLElement>("#media")!,
+});
+
+player.addListener({
+  onAppLoad(app: IPlayerApp, error?: string) {
+    if (error) {
+      console.error("Failed to connect to TextAlive API:", error);
+    }
+  },
+
+  onAppReady(app: IPlayerApp) {
+    if (!app.managed) {
+      player.createFromSongUrl("https://piapro.jp/t/hZ35/20240130103028");
+    }
+  },
+
+  onAppMediaChange(songUrl: string, videoPromise?: Promise<IVideo>) {
+    console.log("Song changed to", songUrl);
+  },
+
+  onAppParameterUpdate(name: string, value: ParameterValue) {
+    if (name === "textColor" && typeof value === "number") {
+      document.body.style.color = `rgb(${value},${value},${value})`;
+    }
+  },
+
+  onVideoReady(v: IVideo) {
+    console.log("Video ready:", v.charCount, "characters");
+  },
+
+  onTimerReady() {
+    document.querySelector<HTMLButtonElement>("#play")!.disabled = false;
+  },
+
+  onTimeUpdate(position: number) {
+    const char = player.video?.findChar(position);
+    if (char) {
+      document.querySelector("#display")!.textContent = char.text;
+    }
+  },
+});
+
+document
+  .querySelector("#play")!
+  .addEventListener("click", () => player.requestPlay());
+```

@@ -1,21 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "TextAlive App API",
+  "projectType": "sdk-library",
+  "projectName": "TextAlive App API",
+  "projectDescription": "A JavaScript/TypeScript SDK for building lyric apps — web applications that display song lyrics synchronized with music playback using beat, chord, and timing data from the TextAlive platform.",
   "theme": "luma",
-  "colors": {
-    "primary": "#1f4391"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/TextAliveJp/textalive-app-api"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/TextAliveJp/textalive-app-api"
-    }
-  },
+  "primaryColor": "#1f4391",
+  "lightColor": null,
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -97,5 +87,46 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Synchronized lyrics playback with beat, chord, and chorus data from Songle",
+    "Hierarchical text units (phrase → word → character) with per-character timing",
+    "Custom Timer support for plugging in different audio backends",
+    "Host integration for embedding lyric apps inside the TextAlive platform",
+    "Easing functions and 2D matrix utilities for smooth lyric animations",
+    "Vocal amplitude and valence/arousal data for expressive visualizations",
+    "Font loading support including Google Fonts and Morisawa TypeSquare",
+    "Works via CDN script tag or npm package"
+  ],
+  "publicApiSurface": [
+    "Player",
+    "BasicTimer",
+    "Ease",
+    "Color",
+    "Matrix2D",
+    "Point",
+    "findTimedObject",
+    "findTimedObjectsInRange",
+    "dataUrlToString",
+    "isStringEncodedDataUrl",
+    "IPlayer",
+    "IPlayerApp",
+    "IVideo",
+    "IPhrase",
+    "IWord",
+    "IChar",
+    "IBeat",
+    "IChord",
+    "IRepetitiveSegment",
+    "ISongMap",
+    "IDataLoader",
+    "PlayerOptions",
+    "PlayerAppOptions",
+    "PlayerVideoOptions",
+    "PlayerListener",
+    "PlayerEventListener",
+    "PlayerAppListener",
+    "RenderingUnitFunction",
+    "Timer"
+  ]
 }

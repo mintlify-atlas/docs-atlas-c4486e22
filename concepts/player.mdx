@@ -1,0 +1,240 @@
+---
+title: "The Player"
+description: "The Player class is the main entry point to the TextAlive App API. It loads song maps, lyrics timing, and exposes every playback control you need."
+---
+
+## Overview
+
+`Player` is the primary class of the TextAlive App API. Every lyric app starts by constructing a `Player` instance. It is responsible for:
+
+- Loading a song's musical analysis (beats, chords, chorus segments) from Songle
+- Fetching and timing lyrics text
+- Managing audio playback through a pluggable `Timer`
+- Firing lifecycle events so your app can react to playback state changes
+
+The `Player` class implements the `IPlayer` interface, which defines the full surface area of the API.
+
+## Minimal initialization
+
+```typescript
+import { Player } from "textalive-app-api";
+
+const player = new Player({
+  app: { token: "your-app-token" },
+  mediaElement: document.querySelector("#media"),
+});
+
+player.addListener({
+  onAppReady(app) {
+    if (!app.songUrl) {
+      // No song was provided by the host — load one yourself
+      player.createFromSongUrl("https://piapro.jp/t/fnhJ/20230131212038");
+    }
+  },
+  onVideoReady(video) {
+    console.log("Video ready:", video);
+  },
+  onTimeUpdate(position) {
+    // Called on every animation frame while playing
+  },
+});
+```
+
+<Note>
+  When `app` is set in `PlayerOptions`, the player automatically reads the
+  `?song=` query parameter and connects to the TextAlive host if the app is
+  embedded inside one.
+</Note>
+
+## PlayerOptions
+
+Pass an options object to the `Player` constructor to configure its behaviour.
+
+<ParamField path="app" type="PlayerAppOptions">
+  Lyric app registration options. When this property is set the player reads
+  the song URL from the query string and tries to communicate with the
+  TextAlive host. Set `app.token` to your developer token obtained from the
+  TextAlive portal.
+
+  ```typescript
+  const player = new Player({
+    app: { token: "your-app-token" },
+  });
+  ```
+</ParamField>
+
+<ParamField path="timer" type="Timer">
+  The `Timer` implementation that drives audio playback and position updates.
+  Defaults to `SongleTimer` when not specified. Pass `new BasicTimer()` to
+  run without audio (useful for debugging).
+
+  ```typescript
+  import { Player, BasicTimer } from "textalive-app-api";
+  const player = new Player({ timer: new BasicTimer() });
+  ```
+</ParamField>
+
+<ParamField path="mediaElement" type="HTMLElement | string">
+  The DOM element (or a CSS selector string) that hosts the audio element
+  and the attribution banner. The player appends its media node as a child
+  of this element.
+</ParamField>
+
+<ParamField path="throttleInterval" type="number">
+  Minimum interval in milliseconds between emissions of the
+  `onThrottledTimeUpdate` event. Use this to rate-limit expensive DOM
+  updates. The `onTimeUpdate` event is always fired at the timer's native
+  rate regardless of this setting.
+</ParamField>
+
+<ParamField path="fontFamilies" type="(FontInfo | string)[]">
+  A list of font families to pre-load. Pass `null` to load every font
+  available on TextAlive. Omit the option to load no extra fonts at startup.
+</ParamField>
+
+<ParamField path="vocalAmplitudeEnabled" type="boolean" default="false">
+  Set to `true` to enable vocal amplitude data loading. Required before
+  calling `player.getVocalAmplitude(time)` or
+  `player.getMaxVocalAmplitude()`.
+</ParamField>
+
+<ParamField path="valenceArousalEnabled" type="boolean" default="false">
+  Set to `true` to enable valence/arousal data loading. Required before
+  calling `player.getValenceArousal(time)` or
+  `player.getMedianValenceArousal()`.
+</ParamField>
+
+## IPlayer properties
+
+Once constructed, you access the player's state through read-only properties.
+
+| Property | Type | Description |
+|---|---|---|
+| `app` | `IPlayerApp` | App status: managed/host mode, song URL, connection state |
+| `data` | `IDataLoader` | Loaded song map, lyrics, and font state |
+| `video` | `IVideo` | The constructed video object containing phrases, words, and chars |
+| `mediaPosition` | `number` | Current media playback position in milliseconds, updated periodically by the timer |
+| `videoPosition` | `number` | Current video position in milliseconds, updated after each rendered frame |
+| `isLoading` | `boolean` | `true` while any song data is still loading |
+| `isPlaying` | `boolean` | `true` while the timer is actively playing |
+| `banner` | `IPlayerBanner` | The attribution banner displayed inside `mediaElement` |
+| `timer` | `Timer` | The active timer instance |
+| `volume` | `number` | Playback volume in the range `[0, 100]` (read/write) |
+| `wait` | `number` | Frame interval in milliseconds (inverse of `fps`, read/write) |
+| `fps` | `number` | Target frame rate in frames per second (read/write) |
+
+## Playback control
+
+All playback methods return `boolean` indicating whether the request was accepted.
+
+```typescript
+// Start playback
+player.requestPlay();
+
+// Pause
+player.requestPause();
+
+// Stop (pause and seek to the beginning)
+player.requestStop();
+
+// Seek the audio to a specific position [ms]
+player.requestMediaSeek(30000);
+
+// Move the video position without touching the audio
+await player.setVideoPosition(30000);
+```
+
+<Warning>
+  `requestMediaSeek` and `setVideoPosition` are different operations.
+  `requestMediaSeek` moves the audio (and triggers `onSeek`), while
+  `setVideoPosition` shifts only the rendered video frame position.
+</Warning>
+
+## Song loading methods
+
+Each method fetches the song map from Songle and builds the `IVideo` object.
+All four return `Promise<IVideo>` and fire `onVideoReady` when complete.
+
+<CodeGroup>
+
+```typescript createFromSongUrl
+// Load by the full URL of the song on a supported service (NicoNico, YouTube, etc.)
+const video = await player.createFromSongUrl(
+  "https://www.nicovideo.jp/watch/sm2057827"
+);
+```
+
+```typescript createFromSongPath
+// Load by the path portion of a Songle URL (strips the protocol/host)
+const video = await player.createFromSongPath(
+  "nicovideo.jp/watch/sm2057827"
+);
+```
+
+```typescript createFromText
+// Build a dummy song map from plain text (no audio, useful for testing layouts)
+const video = await player.createFromText("Hello world");
+```
+
+```typescript createFromJSON
+// Load from a pre-serialised VideoData object
+const video = await player.createFromJSON(videoDataJson);
+```
+
+</CodeGroup>
+
+You can pass an optional `PlayerVideoOptions` second argument to override the lyrics ID, beat revision, or supply raw `VideoData`:
+
+```typescript
+await player.createFromSongUrl("https://…", {
+  video: {
+    lyricId: 59,
+    lyricDiffId: 13,
+  },
+});
+```
+
+## Event listeners
+
+Register a `PlayerListener` to receive lifecycle callbacks:
+
+```typescript
+player.addListener({
+  // App / host events
+  onAppReady(app) { /* host connected */ },
+  onAppMediaChange(songUrl) { /* host changed the song */ },
+
+  // Loading events
+  onSongLoad(song) { /* basic song metadata */ },
+  onSongMapLoad(songMap) { /* beats / chords / segments ready */ },
+  onVideoReady(video) { /* IVideo object constructed */ },
+  onTimerReady(timer) { /* timer initialised, safe to call requestPlay() */ },
+
+  // Playback events
+  onPlay() { /* playback started */ },
+  onPause() { /* playback paused */ },
+  onStop() { /* playback stopped */ },
+  onTimeUpdate(position) { /* every frame [ms] */ },
+  onThrottledTimeUpdate(position) { /* throttled update [ms] */ },
+  onSeek(position) { /* user seeked [ms] */ },
+  onSeekComplete(position) { /* seek finished [ms] */ },
+});
+```
+
+Remove a listener when it is no longer needed:
+
+```typescript
+player.removeListener(myListener);
+```
+
+## Dispose
+
+Call `player.dispose()` to release all resources (audio context, timers, DOM nodes) when your app unmounts.
+
+```typescript
+window.addEventListener("beforeunload", () => player.dispose());
+```
+
+---
+
+For the complete property and method reference see [/api/player](/api/player).
